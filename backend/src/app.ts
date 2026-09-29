@@ -81,11 +81,30 @@ import { createERPQuote } from '../../lib/erp'
 import { COMPANY } from '../../lib/utils'
 import { formChecked, formText, uploadFormDocument, uploadFormImage } from './forms'
 
+const CORS_ORIGINS = new Set([
+  'https://accordmedical.co.ke',
+  'https://www.accordmedical.co.ke',
+  'https://accordwebsite.vercel.app',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+])
+
+function allowedCorsOrigin(origin: string) {
+  if (!origin) return origin
+  const normalized = origin.replace(/\/$/, '')
+  if (CORS_ORIGINS.has(normalized)) return origin
+  try {
+    const { hostname } = new URL(origin)
+    if (hostname === 'localhost' || hostname === '127.0.0.1') return origin
+  } catch {}
+  return ''
+}
+
 const app = new Hono()
 
 app.use('*', bodyLimit({ maxSize: 50 * 1024 * 1024 }))
 app.use('*', cors({
-  origin: (origin) => origin || '*',
+  origin: (origin) => allowedCorsOrigin(origin || ''),
   credentials: true,
   allowHeaders: ['Content-Type', 'Cookie', 'x-import-key'],
   allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
