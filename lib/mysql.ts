@@ -39,6 +39,9 @@ type MysqlState = {
   schemaVersion: number
   schemaPromise: Promise<void> | null
   localCatalogReady: { at: number; ready: boolean } | null
+  downUntil: number
+  warmPromise: Promise<Pool> | null
+  loggedDown: boolean
 }
 
 const globalForMysql = globalThis as typeof globalThis & { __accordMysql?: MysqlState }
@@ -51,9 +54,16 @@ function mysqlState(): MysqlState {
       schemaVersion: 0,
       schemaPromise: null,
       localCatalogReady: null,
+      downUntil: 0,
+      warmPromise: null,
+      loggedDown: false,
     }
   }
-  return globalForMysql.__accordMysql
+  const state = globalForMysql.__accordMysql
+  if (typeof state.downUntil !== 'number') state.downUntil = 0
+  if (typeof state.loggedDown !== 'boolean') state.loggedDown = false
+  if (!('warmPromise' in state)) state.warmPromise = null
+  return state
 }
 
 export function isMysqlConfigured() {
@@ -92,12 +102,35 @@ export function mysqlFileIdFromPublicId(publicId: string) {
   return match ? Number(match[1]) : null
 }
 
+export function isMysqlConnectError(error: unknown) {
+  const code = (error as { code?: string }).code
+  return code === 'ETIMEDOUT' || code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'ENETUNREACH'
+}
+
 function isMysqlFatal(error: unknown) {
+  if (isMysqlConnectError(error)) return false
   const err = error as { code?: string; fatal?: boolean }
   return Boolean(err.fatal)
     || err.code === 'PROTOCOL_CONNECTION_LOST'
     || err.code === 'PROTOCOL_ENQUEUE_AFTER_FATAL_ERROR'
     || err.code === 'ECONNRESET'
+}
+
+function mysqlUnreachableError() {
+  const host = process.env.MYSQL_HOST || 'MYSQL_HOST'
+  const port = process.env.MYSQL_PORT || '3306'
+  const error = new Error(`Cannot reach MySQL at ${host}:${port}`) as Error & { code: string }
+  error.code = 'ETIMEDOUT'
+  return error
+}
+
+function markMysqlDown(error: unknown) {
+  if (!isMysqlConnectError(error)) return
+  const state = mysqlState()
+  state.downUntil = Date.now() + 20_000
+  if (state.loggedDown) return
+  state.loggedDown = true
+  console.error(`MySQL unreachable (${(error as { code?: string }).code}). Retrying in 20s.`)
 }
 
 async function resetMysqlPool() {
@@ -108,26 +141,47 @@ async function resetMysqlPool() {
   state.schemaVersion = 0
   state.schemaPromise = null
   state.localCatalogReady = null
+  state.warmPromise = null
   if (pool) await pool.end().catch(() => {})
 }
 
 async function getPool(): Promise<Pool> {
   if (!isMysqlConfigured()) throw new Error('MySQL is not configured')
   const state = mysqlState()
-  if (state.pool) return state.pool
-  state.pool = mysql.createPool({
+  if (Date.now() < state.downUntil) throw mysqlUnreachableError()
+  if (state.pool && !state.warmPromise) return state.pool
+  if (state.warmPromise) return state.warmPromise
+
+  const pool = mysql.createPool({
     host: process.env.MYSQL_HOST,
     port: Number(process.env.MYSQL_PORT || 3306),
     user: process.env.MYSQL_USER,
     password: process.env.MYSQL_PASSWORD || '',
     database: process.env.MYSQL_DATABASE,
     waitForConnections: true,
-    connectionLimit: 8,
+    connectionLimit: 4,
     enableKeepAlive: true,
     charset: 'utf8mb4',
-    connectTimeout: 8_000,
+    connectTimeout: 4_000,
   })
-  return state.pool
+  state.pool = pool
+  state.warmPromise = (async () => {
+    try {
+      const conn = await pool.getConnection()
+      conn.release()
+      state.downUntil = 0
+      state.loggedDown = false
+      return pool
+    } catch (error) {
+      markMysqlDown(error)
+      state.pool = null
+      await pool.end().catch(() => {})
+      throw error
+    }
+  })().finally(() => {
+    if (state.warmPromise) state.warmPromise = null
+  })
+  return state.warmPromise
 }
 
 async function withMysqlRetry<T>(fn: () => Promise<T>): Promise<T> {
@@ -156,7 +210,10 @@ async function applyMysqlSchema() {
   try {
     await pool.query('SELECT 1 FROM accord_nx_products LIMIT 1')
     return
-  } catch {}
+  } catch (error) {
+    const code = (error as { code?: string }).code
+    if (code !== 'ER_NO_SUCH_TABLE' && code !== 'ER_BAD_TABLE_ERROR') throw error
+  }
   await pool.query(`
     CREATE TABLE IF NOT EXISTS accord_nx_files (
       id INT UNSIGNED NOT NULL AUTO_INCREMENT,

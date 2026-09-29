@@ -67,6 +67,7 @@ import {
 } from '../../lib/mongodb'
 import {
   isMysqlConfigured,
+  isMysqlConnectError,
   isStoreConfigured,
   mysqlAddProductImage,
   mysqlDeleteFile,
@@ -89,6 +90,14 @@ app.use('*', cors({
   allowHeaders: ['Content-Type', 'Cookie', 'x-import-key'],
   allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
 }))
+
+app.onError((error, c) => {
+  if (isMysqlConnectError(error)) {
+    return c.json({ success: false, message: error.message }, 503)
+  }
+  console.error(error)
+  return c.json({ success: false, message: error instanceof Error ? error.message : 'Server error' }, 500)
+})
 
 function json(c: { json: (data: unknown, status?: number) => Response }, data: unknown, status = 200) {
   return c.json(data, status)
@@ -128,7 +137,7 @@ let bootstrapMemo: { at: number; payload: Record<string, unknown> } | null = nul
 let bootstrapInflight: Promise<Record<string, unknown>> | null = null
 
 async function loadBootstrap() {
-  const catalog = await getCatalog()
+  const catalog = await getCatalog().catch(() => ({ products: [], categories: [] }))
   const [showPrices, jobs, offers] = await Promise.all([
     getPriceVisibility().catch(() => true),
     listJobs(true).catch(() => []),
@@ -240,15 +249,20 @@ app.get('/api/redirects/lookup', async (c) => {
 })
 
 app.get('/api/media/file/:id', async (c) => {
-  const file = await mysqlGetFile(c.req.param('id'))
-  if (!file) return c.json({ success: false, message: 'File not found' }, 404)
-  return new Response(new Uint8Array(file.data), {
-    headers: {
-      'Content-Type': file.mime || 'application/octet-stream',
-      'Content-Length': String(file.data.length),
-      'Cache-Control': 'public, max-age=86400',
-    },
-  })
+  try {
+    const file = await mysqlGetFile(c.req.param('id'))
+    if (!file) return c.json({ success: false, message: 'File not found' }, 404)
+    return new Response(new Uint8Array(file.data), {
+      headers: {
+        'Content-Type': file.mime || 'application/octet-stream',
+        'Content-Length': String(file.data.length),
+        'Cache-Control': 'public, max-age=86400',
+      },
+    })
+  } catch (error) {
+    if (isMysqlConnectError(error)) return c.body(null, 503)
+    throw error
+  }
 })
 
 app.get('/api/catalogues/:id/download', async (c) => {
@@ -724,7 +738,12 @@ app.patch('/api/admin/manufacturers', async (c) => {
 app.get('/api/admin/performance', async (c) => {
   const auth = requireAdmin(c)
   if (auth.error) return c.json(auth.error, auth.status)
-  return c.json({ success: true, data: await getCategoryPerformance() })
+  try {
+    return c.json({ success: true, data: await getCategoryPerformance() })
+  } catch (error) {
+    if (isMysqlConnectError(error)) return c.json({ success: true, data: [] })
+    throw error
+  }
 })
 
 app.get('/api/admin/offers', async (c) => {

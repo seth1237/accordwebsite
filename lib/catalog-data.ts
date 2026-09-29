@@ -9,7 +9,7 @@ import {
   type CatalogProduct,
 } from '@/lib/catalog'
 import { getProductMetricsMap, getProductContentMap, getSiteSettings, type ProductContent } from '@/lib/mongodb'
-import { isMysqlConfigured, mysqlListCatalogProducts, mysqlSetLocalCatalogReady } from '@/lib/mysql'
+import { isMysqlConfigured, isMysqlConnectError, mysqlListCatalogProducts, mysqlSetLocalCatalogReady } from '@/lib/mysql'
 
 function catalogSource() {
   const value = String(process.env.CATALOG_SOURCE || 'auto').trim().toLowerCase()
@@ -29,8 +29,10 @@ async function loadRawProducts(): Promise<CatalogProduct[]> {
         return local
       }
       if (source === 'mysql') return local
-    } catch {
-      if (source === 'mysql') return []
+    } catch (error) {
+      const cached = lastCatalog() || (await readDevCatalogCache())
+      if (cached?.products.length) return cached.products
+      if (source === 'mysql' || isMysqlConnectError(error)) return []
     }
   }
   return fetchAccordProducts().catch(() => [] as CatalogProduct[])

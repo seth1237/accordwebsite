@@ -9,7 +9,11 @@ setDefaultResultOrder('ipv4first')
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const envOpts = { quiet: true }
 config({ path: resolve(root, '.env'), ...envOpts })
-config({ path: resolve(root, '.env.development'), ...envOpts })
+if (process.env.NODE_ENV !== 'production') {
+  config({ path: resolve(root, '.env.development'), ...envOpts })
+} else {
+  config({ path: resolve(root, '.env.production'), ...envOpts })
+}
 config({ path: resolve(root, '.env.local'), override: true, ...envOpts })
 
 const { default: app } = await import('./app.ts')
