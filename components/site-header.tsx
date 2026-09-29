@@ -16,5 +16,5 @@ export async function SiteHeader() {
     manufacturer: product.manufacturer,
     productType: product.productType,
   }))
-  return <SiteHeaderNav categories={buildNavCategories(catalog, 6).filter((category) => category.slug !== 'uncategorized')} products={products} jobCount={jobs.length} />
+  return <SiteHeaderNav categories={buildNavCategories(catalog, 5).filter((category) => category.slug !== 'uncategorized')} products={products} jobCount={jobs.length} />
 }

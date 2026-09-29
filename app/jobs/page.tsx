@@ -19,16 +19,21 @@ export default async function Jobs() {
         {jobs.length === 0 && <p className="empty-state">No open roles right now.</p>}
         <div className="job-grid">
           {jobs.map((job) => (
-            <Link key={job._id} href={jobHref(job)} className="job-card">
-              <div className="job-card-image">
+            <article key={job._id} className="job-card">
+              <Link href={jobHref(job)} className="job-card-image" aria-label={job.title}>
                 {job.image ? <img src={job.image.secureUrl} alt="" /> : <span />}
-              </div>
+              </Link>
               <div className="job-card-body">
                 <span className="job-meta">{job.location} · {job.employmentType}</span>
-                <h3>{job.title}</h3>
+                <h3>
+                  <Link href={jobHref(job)}>{job.title}</Link>
+                </h3>
                 {job.summary && <p>{job.summary}</p>}
+                <Link href={jobHref(job)} className="button button-primary job-details-btn">
+                  View Application details
+                </Link>
               </div>
-            </Link>
+            </article>
           ))}
         </div>
       </section>

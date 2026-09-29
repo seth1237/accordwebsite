@@ -42,6 +42,7 @@ function shouldLookup(pathname: string) {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   if (pathname === '/admin/login' || pathname.startsWith('/api/auth/')) return NextResponse.next()
+  if (pathname === '/api/admin/catalog-import') return NextResponse.next()
   if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin')) {
     const session = request.cookies.get('tarumed_admin')?.value
     if (!session) {

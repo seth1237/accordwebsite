@@ -6,10 +6,10 @@ export function Logo() {
   return (
     <Link href="/" className="logo" aria-label={`${COMPANY.name} home`}>
       <Image
-        src="/logo-clear.png"
+        src="/logo-only.png"
         alt={`${COMPANY.name} — ${COMPANY.tagline}`}
-        width={956}
-        height={336}
+        width={300}
+        height={100}
         priority
         className="logo-img"
       />

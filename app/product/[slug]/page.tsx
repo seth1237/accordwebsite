@@ -7,7 +7,7 @@ import { QuoteForm } from '@/components/quote-form'
 import { ProductGallery } from '@/components/product-gallery'
 import { TrackProductClick } from '@/components/track-product-click'
 import { RelatedProducts } from '@/components/related-products'
-import { categoryHref, displayPrice, productHref } from '@/lib/catalog'
+import { displayPrice, productHref } from '@/lib/catalog'
 import { getCatalogProduct, getPriceVisibility, getRelatedProducts } from '@/lib/catalog-data'
 import { catalogueDownloadHref } from '@/lib/content'
 import { listCatalogues } from '@/lib/content-data'
@@ -62,17 +62,12 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           <nav className="product-breadcrumb" aria-label="Breadcrumb">
             <Link href="/products">Products</Link>
             <span>/</span>
-            <Link href={categoryHref({ slug: product.categoryId, name: product.categoryName })}>
-              {product.categoryName}
-            </Link>
-            <span>/</span>
             <span>{product.name}</span>
           </nav>
           <div className="product-stage">
             <div className="product-detail-grid">
               <ProductGallery product={product} />
               <div className="product-summary">
-                <span className="kicker">{product.categoryName}</span>
                 <h1 className="product-detail-title">{product.name}</h1>
                 <div className="product-meta-row">
                   {product.productType && <span className="product-chip">{product.productType}</span>}
@@ -88,32 +83,28 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                     <dt>SKU</dt>
                     <dd>{product.id}</dd>
                   </div>
-                  <div>
-                    <dt>Category</dt>
-                    <dd>{product.categoryName}</dd>
-                  </div>
                 </dl>
+                {product.details ? (
+                  <div className="product-tabs" id="details">
+                    <div className="product-tablist" role="tablist">
+                      <span className="active">Details</span>
+                    </div>
+                    <div className="product-specs">
+                      <div dangerouslySetInnerHTML={{ __html: product.details }} />
+                    </div>
+                  </div>
+                ) : product.description ? (
+                  <div className="product-tabs" id="details">
+                    <div className="product-tablist" role="tablist">
+                      <span className="active">Details</span>
+                    </div>
+                    <div className="product-specs">
+                      <p>{product.description}</p>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
-            {product.details ? (
-              <div className="product-tabs" id="details">
-                <div className="product-tablist" role="tablist">
-                  <span className="active">Details</span>
-                </div>
-                <div className="product-specs">
-                  <div dangerouslySetInnerHTML={{ __html: product.details }} />
-                </div>
-              </div>
-            ) : product.description ? (
-              <div className="product-tabs" id="details">
-                <div className="product-tablist" role="tablist">
-                  <span className="active">Details</span>
-                </div>
-                <div className="product-specs">
-                  <p>{product.description}</p>
-                </div>
-              </div>
-            ) : null}
           </div>
         </div>
       </section>

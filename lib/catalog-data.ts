@@ -11,11 +11,31 @@ import {
   type CatalogProduct,
 } from '@/lib/catalog'
 import { getProductMetricsMap, getProductContentMap, getSiteSettings, type ProductContent } from '@/lib/mongodb'
+import { isMysqlConfigured, mysqlIsLocalCatalogReady, mysqlListCatalogProducts } from '@/lib/mysql'
+
+function catalogSource() {
+  const value = String(process.env.CATALOG_SOURCE || 'auto').trim().toLowerCase()
+  if (value === 'mysql' || value === 'local') return 'mysql'
+  if (value === 'remote') return 'remote'
+  return 'auto'
+}
+
+async function loadRawProducts(): Promise<CatalogProduct[]> {
+  const source = catalogSource()
+  if (source === 'remote') return fetchAccordProducts().catch(() => [] as CatalogProduct[])
+  if (isMysqlConfigured()) {
+    const local = await mysqlListCatalogProducts().catch(() => [] as CatalogProduct[])
+    if (source === 'mysql') return local
+    const ready = await mysqlIsLocalCatalogReady().catch(() => false)
+    if (ready && local.length) return local
+  }
+  return fetchAccordProducts().catch(() => [] as CatalogProduct[])
+}
 
 const getCatalogBase = cache(async (categoryKey: string): Promise<Catalog> => {
   const categoryIds = categoryKey ? categoryKey.split(',') : undefined
   const [rawProducts, content] = await Promise.all([
-    fetchAccordProducts().catch(() => [] as CatalogProduct[]),
+    loadRawProducts(),
     getProductContentMap().catch(() => new Map<string, ProductContent>()),
   ])
 

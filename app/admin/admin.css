@@ -33,6 +33,10 @@
 .card-title h3 { font-size: 16px; margin: 0; }
 .card-title span { display: block; color: #789096; font-size: 11px; margin-top: 5px; }
 .admin-message { background: #e4f5ef; color: #087f85; padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; }
+.catalog-import-card { margin-bottom: 18px; }
+.catalog-import-card .card-title { align-items: center; }
+.catalog-import-meta { margin: 0; font-size: 13px; color: #60767d; }
+.catalog-import-meta b { color: #123744; }
 .price-setting { margin-bottom: 18px; }
 .setting-row { display: flex; justify-content: space-between; align-items: center; gap: 18px; }
 .setting-row h3 { font-size: 16px; margin: 0 0 6px; }

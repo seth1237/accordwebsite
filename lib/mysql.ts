@@ -2,6 +2,7 @@ import 'server-only'
 
 import mysql, { type Pool, type ResultSetHeader, type RowDataPacket } from 'mysql2/promise'
 import type { Catalogue, CatalogueDownload, CompanyProfilePage, MediaAsset } from '@/lib/content'
+import { mergeOverlay, type CatalogProduct } from '@/lib/catalog'
 
 type AdminUser = {
   _id?: string
@@ -29,16 +30,19 @@ type SiteSettings = {
   updatedAt: Date
 }
 
+const MYSQL_SCHEMA_VERSION = 3
+
 type MysqlState = {
   pool: Pool | null
   schemaReady: boolean
+  schemaVersion: number
 }
 
 const globalForMysql = globalThis as typeof globalThis & { __accordMysql?: MysqlState }
 
 function mysqlState(): MysqlState {
   if (!globalForMysql.__accordMysql) {
-    globalForMysql.__accordMysql = { pool: null, schemaReady: false }
+    globalForMysql.__accordMysql = { pool: null, schemaReady: false, schemaVersion: 0 }
   }
   return globalForMysql.__accordMysql
 }
@@ -97,9 +101,20 @@ async function getPool(): Promise<Pool> {
   return state.pool
 }
 
+async function mysqlAddColumnIfMissing(table: string, column: string, definition: string) {
+  const pool = await getPool()
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT COUNT(*) AS n FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+    [table, column],
+  )
+  if (Number(rows[0]?.n)) return
+  await pool.query(`ALTER TABLE \`${table}\` ADD COLUMN ${definition}`)
+}
+
 export async function ensureMysqlSchema() {
   const state = mysqlState()
-  if (!isMysqlConfigured() || state.schemaReady) return
+  if (!isMysqlConfigured() || (state.schemaReady && state.schemaVersion === MYSQL_SCHEMA_VERSION)) return
   const pool = await getPool()
   await pool.query(`
     CREATE TABLE IF NOT EXISTS accord_nx_files (
@@ -212,7 +227,33 @@ export async function ensureMysqlSchema() {
       PRIMARY KEY (from_product_id, to_product_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
   `)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS accord_nx_products (
+      id VARCHAR(64) NOT NULL,
+      slug VARCHAR(191) NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      product_type VARCHAR(191) NOT NULL DEFAULT '',
+      description MEDIUMTEXT NOT NULL,
+      details MEDIUMTEXT NOT NULL,
+      price DECIMAL(12,2) NOT NULL DEFAULT 0,
+      compare_at DECIMAL(12,2) NULL,
+      manufacturer VARCHAR(255) NOT NULL DEFAULT '',
+      category_id VARCHAR(128) NOT NULL,
+      category_name VARCHAR(255) NOT NULL,
+      featured TINYINT(1) NOT NULL DEFAULT 0,
+      in_stock TINYINT(1) NOT NULL DEFAULT 1,
+      created_on VARCHAR(64) NOT NULL DEFAULT '',
+      imported_at DATETIME NOT NULL,
+      updated_at DATETIME NOT NULL,
+      PRIMARY KEY (id),
+      UNIQUE KEY slug (slug),
+      KEY category_id (category_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+  `)
+  await mysqlAddColumnIfMissing('accord_nx_files', 'source_url', `source_url VARCHAR(512) NOT NULL DEFAULT ''`)
+  await mysqlAddColumnIfMissing('accord_nx_site_settings', 'use_local_catalog', `use_local_catalog TINYINT(1) NOT NULL DEFAULT 0`)
   state.schemaReady = true
+  state.schemaVersion = MYSQL_SCHEMA_VERSION
 }
 
 type FileRow = RowDataPacket & {
@@ -222,6 +263,7 @@ type FileRow = RowDataPacket & {
   filename: string
   mime: string
   file_data?: Buffer
+  source_url?: string
   created_at: Date
 }
 
@@ -295,12 +337,21 @@ export async function mysqlSaveFile(input: {
   filename: string
   mime: string
   buffer: Buffer
+  sourceUrl?: string
 }): Promise<MediaAsset> {
   await ensureMysqlSchema()
   const pool = await getPool()
   const [result] = await pool.query<ResultSetHeader>(
-    'INSERT INTO accord_nx_files (kind, owner_key, filename, mime, file_data, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    [input.kind, input.ownerKey || '', input.filename || 'file', input.mime || 'application/octet-stream', input.buffer, new Date()],
+    'INSERT INTO accord_nx_files (kind, owner_key, filename, mime, file_data, source_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [
+      input.kind,
+      input.ownerKey || '',
+      input.filename || 'file',
+      input.mime || 'application/octet-stream',
+      input.buffer,
+      input.sourceUrl || '',
+      new Date(),
+    ],
   )
   return fileAsset(result.insertId)
 }
@@ -552,6 +603,16 @@ export async function mysqlGetProductContentMap() {
     map.set(image.owner_key, current)
   }
   return map
+}
+
+export async function mysqlProductHasDetails(erpProductId: string) {
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const [rows] = await pool.query<RowDataPacket[]>(
+    'SELECT details FROM accord_nx_product_content WHERE erp_product_id = ? LIMIT 1',
+    [erpProductId],
+  )
+  return Boolean(String(rows[0]?.details || '').trim())
 }
 
 export async function mysqlGetProductContent(erpProductId: string): Promise<ProductContent> {
@@ -837,4 +898,164 @@ export async function mysqlGetCategoryPerformance() {
     shares: Number(row.shares) || 0,
     productsClicked: Number(row.productsClicked) || 0,
   }))
+}
+
+type CatalogProductRow = RowDataPacket & {
+  id: string
+  slug: string
+  name: string
+  product_type: string
+  description: string
+  details: string
+  price: number | string
+  compare_at: number | string | null
+  manufacturer: string
+  category_id: string
+  category_name: string
+  featured: number
+  in_stock: number
+  created_on: string
+}
+
+function mapCatalogProductRow(row: CatalogProductRow): CatalogProduct {
+  const price = Number(row.price) || 0
+  const compareAt = Number(row.compare_at)
+  return {
+    id: String(row.id),
+    name: row.name,
+    description: row.description || '',
+    details: row.details || '',
+    categoryId: row.category_id,
+    categoryName: row.category_name,
+    price,
+    compareAt: Number.isFinite(compareAt) && compareAt > 0 ? compareAt : undefined,
+    unit: 'unit',
+    stock: 0,
+    inStock: Boolean(row.in_stock),
+    image: null,
+    images: [],
+    imageAssets: [],
+    manufacturer: row.manufacturer || undefined,
+    clicks: 0,
+    shares: 0,
+    slug: row.slug,
+    shopUrl: `/product/${row.slug}`,
+    productType: row.product_type || null,
+    featured: Boolean(row.featured),
+    createdOn: row.created_on || undefined,
+  }
+}
+
+export async function mysqlCountCatalogProducts() {
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const [rows] = await pool.query<RowDataPacket[]>('SELECT COUNT(*) AS total FROM accord_nx_products')
+  return Number(rows[0]?.total) || 0
+}
+
+export async function mysqlCatalogProductIds() {
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const [rows] = await pool.query<RowDataPacket[]>('SELECT id FROM accord_nx_products')
+  return new Set(rows.map((row) => String(row.id)))
+}
+
+export async function mysqlListSourceUrls(ownerKey: string) {
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const [rows] = await pool.query<FileRow[]>(
+    'SELECT source_url FROM accord_nx_files WHERE owner_key = ? AND source_url <> ?',
+    [ownerKey, ''],
+  )
+  return new Set(rows.map((row) => row.source_url).filter(Boolean) as string[])
+}
+
+export async function mysqlUpsertCatalogProduct(product: CatalogProduct) {
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const now = new Date()
+  await pool.query(
+    `INSERT INTO accord_nx_products
+      (id, slug, name, product_type, description, details, price, compare_at, manufacturer, category_id, category_name, featured, in_stock, created_on, imported_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+      slug = VALUES(slug),
+      name = VALUES(name),
+      product_type = VALUES(product_type),
+      description = VALUES(description),
+      details = IF(details = '' OR details IS NULL, VALUES(details), details),
+      price = VALUES(price),
+      compare_at = VALUES(compare_at),
+      manufacturer = VALUES(manufacturer),
+      category_id = VALUES(category_id),
+      category_name = VALUES(category_name),
+      featured = VALUES(featured),
+      in_stock = VALUES(in_stock),
+      created_on = VALUES(created_on),
+      updated_at = VALUES(updated_at)`,
+    [
+      product.id,
+      product.slug,
+      product.name,
+      product.productType || '',
+      product.description || '',
+      product.details || '',
+      product.price || 0,
+      product.compareAt || null,
+      product.manufacturer || '',
+      product.categoryId,
+      product.categoryName,
+      product.featured ? 1 : 0,
+      product.inStock ? 1 : 0,
+      product.createdOn || '',
+      now,
+      now,
+    ],
+  )
+}
+
+export async function mysqlListCatalogProducts(): Promise<CatalogProduct[]> {
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const [rows] = await pool.query<CatalogProductRow[]>('SELECT * FROM accord_nx_products ORDER BY name ASC')
+  if (!rows.length) return []
+  const content = await mysqlGetProductContentMap()
+  return rows.map((row) => mergeOverlay(mapCatalogProductRow(row), content.get(String(row.id))))
+}
+
+export async function mysqlCatalogImportStats() {
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const [productRows] = await pool.query<RowDataPacket[]>('SELECT COUNT(*) AS total FROM accord_nx_products')
+  const [imageRows] = await pool.query<RowDataPacket[]>(
+    `SELECT COUNT(*) AS total FROM accord_nx_files
+     WHERE kind IN ('product-image', 'product-installation') AND source_url <> ''`,
+  )
+  const [fileRows] = await pool.query<RowDataPacket[]>(
+    `SELECT COUNT(*) AS total FROM accord_nx_files WHERE kind IN ('product-image', 'product-installation')`,
+  )
+  return {
+    products: Number(productRows[0]?.total) || 0,
+    importedImages: Number(imageRows[0]?.total) || 0,
+    storedImages: Number(fileRows[0]?.total) || 0,
+  }
+}
+
+export async function mysqlIsLocalCatalogReady() {
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const [rows] = await pool.query<RowDataPacket[]>(
+    'SELECT use_local_catalog FROM accord_nx_site_settings WHERE id = ? LIMIT 1',
+    ['default'],
+  )
+  return Boolean(rows[0]?.use_local_catalog)
+}
+
+export async function mysqlSetLocalCatalogReady(ready: boolean) {
+  await mysqlGetSiteSettings()
+  const pool = await getPool()
+  await pool.query(
+    `UPDATE accord_nx_site_settings SET use_local_catalog = ?, updated_at = ? WHERE id = ?`,
+    [ready ? 1 : 0, new Date(), 'default'],
+  )
 }
