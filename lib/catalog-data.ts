@@ -24,12 +24,27 @@ async function loadRawProducts(): Promise<CatalogProduct[]> {
   const source = catalogSource()
   if (source === 'remote') return fetchAccordProducts().catch(() => [] as CatalogProduct[])
   if (isMysqlConfigured()) {
-    const local = await mysqlListCatalogProducts().catch(() => [] as CatalogProduct[])
-    if (source === 'mysql') return local
+    if (source === 'mysql') return mysqlListCatalogProducts().catch(() => [] as CatalogProduct[])
     const ready = await mysqlIsLocalCatalogReady().catch(() => false)
-    if (ready && local.length) return local
+    if (ready) return mysqlListCatalogProducts().catch(() => [] as CatalogProduct[])
   }
   return fetchAccordProducts().catch(() => [] as CatalogProduct[])
+}
+
+const CATALOG_TTL_MS = process.env.NODE_ENV === 'production' ? 60_000 : 15_000
+
+type CatalogMemoState = {
+  memo: { key: string; at: number; catalog: Catalog } | null
+  inflight: Map<string, Promise<Catalog>>
+}
+
+const globalForCatalog = globalThis as typeof globalThis & { __accordCatalogMemo?: CatalogMemoState }
+
+function catalogMemoState(): CatalogMemoState {
+  if (!globalForCatalog.__accordCatalogMemo) {
+    globalForCatalog.__accordCatalogMemo = { memo: null, inflight: new Map() }
+  }
+  return globalForCatalog.__accordCatalogMemo
 }
 
 const getCatalogBase = cache(async (categoryKey: string): Promise<Catalog> => {
@@ -53,9 +68,9 @@ const getCatalogBase = cache(async (categoryKey: string): Promise<Catalog> => {
   }
 })
 
-export async function getCatalog(categoryIds?: string[]): Promise<Catalog> {
+async function loadCatalog(key: string, categoryIds?: string[]): Promise<Catalog> {
   const [base, metrics] = await Promise.all([
-    getCatalogBase(categoryIds?.slice().sort().join(',') || ''),
+    getCatalogBase(key),
     getProductMetricsMap().catch(() => new Map()),
   ])
 
@@ -70,6 +85,7 @@ export async function getCatalog(categoryIds?: string[]): Promise<Catalog> {
   }
 
   if (catalog.products.length) {
+    catalogMemoState().memo = { key, at: Date.now(), catalog }
     if (!categoryIds?.length) await writeDevCatalogCache(catalog)
     return catalog
   }
@@ -79,6 +95,23 @@ export async function getCatalog(categoryIds?: string[]): Promise<Catalog> {
   const cached = lastCatalog() || (await readDevCatalogCache())
   if (cached?.products.length) return cached
   return catalog
+}
+
+export async function getCatalog(categoryIds?: string[]): Promise<Catalog> {
+  const key = categoryIds?.slice().sort().join(',') || ''
+  const state = catalogMemoState()
+  if (state.memo && state.memo.key === key && Date.now() - state.memo.at < CATALOG_TTL_MS) {
+    return state.memo.catalog
+  }
+
+  const pending = state.inflight.get(key)
+  if (pending) return pending
+
+  const load = loadCatalog(key, categoryIds).finally(() => {
+    state.inflight.delete(key)
+  })
+  state.inflight.set(key, load)
+  return load
 }
 
 export async function getCatalogProduct(idOrSlug: string): Promise<CatalogProduct | null> {

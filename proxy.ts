@@ -28,6 +28,16 @@ const LIVE_PREFIXES = [
   '/api',
 ]
 
+const SKIP_LOOKUP_PREFIXES = [
+  '/json',
+  '/.well-known',
+  '/wp-admin',
+  '/wp-content',
+  '/wp-includes',
+  '/.git',
+  '/cgi-bin',
+]
+
 function isLivePath(pathname: string) {
   if (pathname === '/' || pathname === '/product') return true
   return LIVE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`) || pathname.startsWith(prefix) && prefix.endsWith('/'))
@@ -36,6 +46,7 @@ function isLivePath(pathname: string) {
 function shouldLookup(pathname: string) {
   if (pathname.startsWith('/product-tag/')) return true
   if (pathname.startsWith('/_next') || pathname.startsWith('/api') || pathname.includes('.')) return false
+  if (SKIP_LOOKUP_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) return false
   return !isLivePath(pathname)
 }
 
@@ -58,7 +69,11 @@ export async function proxy(request: NextRequest) {
     try {
       const lookup = new URL('/api/redirects/lookup', request.url)
       lookup.searchParams.set('from', pathname)
-      const response = await fetch(lookup, { headers: { cookie: request.headers.get('cookie') || '' }, cache: 'no-store' })
+      const response = await fetch(lookup, {
+        headers: { cookie: request.headers.get('cookie') || '' },
+        cache: 'no-store',
+        signal: AbortSignal.timeout(800),
+      })
       if (response.ok) {
         const payload = await response.json() as { to?: string; status?: number }
         if (payload.to) {
@@ -81,6 +96,6 @@ export const config = {
     '/api/admin/((?!company-profile/pdf).*)',
     '/category/:path*',
     '/product-tag/:path*',
-    '/((?!_next/static|_next/image|favicon.ico|api/|.*\\.).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api/|json(?:/|$)|.*\\.).*)',
   ],
 }

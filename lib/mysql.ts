@@ -2,7 +2,7 @@ import 'server-only'
 
 import mysql, { type Pool, type ResultSetHeader, type RowDataPacket } from 'mysql2/promise'
 import type { Catalogue, CatalogueDownload, CompanyProfilePage, MediaAsset } from '@/lib/content'
-import { mergeOverlay, type CatalogProduct } from '@/lib/catalog'
+import type { CatalogProduct } from '@/lib/catalog'
 
 type AdminUser = {
   _id?: string
@@ -36,13 +36,21 @@ type MysqlState = {
   pool: Pool | null
   schemaReady: boolean
   schemaVersion: number
+  schemaPromise: Promise<void> | null
+  localCatalogReady: { at: number; ready: boolean } | null
 }
 
 const globalForMysql = globalThis as typeof globalThis & { __accordMysql?: MysqlState }
 
 function mysqlState(): MysqlState {
   if (!globalForMysql.__accordMysql) {
-    globalForMysql.__accordMysql = { pool: null, schemaReady: false, schemaVersion: 0 }
+    globalForMysql.__accordMysql = {
+      pool: null,
+      schemaReady: false,
+      schemaVersion: 0,
+      schemaPromise: null,
+      localCatalogReady: null,
+    }
   }
   return globalForMysql.__accordMysql
 }
@@ -95,6 +103,8 @@ async function getPool(): Promise<Pool> {
     database: process.env.MYSQL_DATABASE,
     waitForConnections: true,
     connectionLimit: 8,
+    queueLimit: 32,
+    connectTimeout: 4000,
     enableKeepAlive: true,
     charset: 'utf8mb4',
   })
@@ -112,9 +122,7 @@ async function mysqlAddColumnIfMissing(table: string, column: string, definition
   await pool.query(`ALTER TABLE \`${table}\` ADD COLUMN ${definition}`)
 }
 
-export async function ensureMysqlSchema() {
-  const state = mysqlState()
-  if (!isMysqlConfigured() || (state.schemaReady && state.schemaVersion === MYSQL_SCHEMA_VERSION)) return
+async function applyMysqlSchema() {
   const pool = await getPool()
   await pool.query(`
     CREATE TABLE IF NOT EXISTS accord_nx_files (
@@ -252,8 +260,22 @@ export async function ensureMysqlSchema() {
   `)
   await mysqlAddColumnIfMissing('accord_nx_files', 'source_url', `source_url VARCHAR(512) NOT NULL DEFAULT ''`)
   await mysqlAddColumnIfMissing('accord_nx_site_settings', 'use_local_catalog', `use_local_catalog TINYINT(1) NOT NULL DEFAULT 0`)
-  state.schemaReady = true
-  state.schemaVersion = MYSQL_SCHEMA_VERSION
+}
+
+export async function ensureMysqlSchema() {
+  const state = mysqlState()
+  if (!isMysqlConfigured() || (state.schemaReady && state.schemaVersion === MYSQL_SCHEMA_VERSION)) return
+  if (!state.schemaPromise) {
+    state.schemaPromise = applyMysqlSchema()
+      .then(() => {
+        state.schemaReady = true
+        state.schemaVersion = MYSQL_SCHEMA_VERSION
+      })
+      .finally(() => {
+        state.schemaPromise = null
+      })
+  }
+  await state.schemaPromise
 }
 
 type FileRow = RowDataPacket & {
@@ -746,6 +768,20 @@ export async function mysqlGetDocBySlug<T extends { _id: string }>(kind: string,
   return rows[0] ? parseDoc<T>(rows[0]) : null
 }
 
+export async function mysqlGetDocByPayloadFrom<T extends { _id: string; from?: string }>(kind: string, from: string) {
+  if (!from) return null
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const [rows] = await pool.query<DocRow[]>(
+    `SELECT id, kind, slug, published, payload, created_at, updated_at
+     FROM accord_nx_docs
+     WHERE kind = ? AND JSON_UNQUOTE(JSON_EXTRACT(payload, '$.from')) = ?
+     LIMIT 1`,
+    [kind, from],
+  )
+  return rows[0] ? parseDoc<T>(rows[0]) : null
+}
+
 export async function mysqlUniqueSlug(kind: string, base: string, excludeId?: string) {
   const root = base || 'item'
   let slug = root
@@ -1017,10 +1053,12 @@ export async function mysqlUpsertCatalogProduct(product: CatalogProduct) {
 export async function mysqlListCatalogProducts(): Promise<CatalogProduct[]> {
   await ensureMysqlSchema()
   const pool = await getPool()
-  const [rows] = await pool.query<CatalogProductRow[]>('SELECT * FROM accord_nx_products ORDER BY name ASC')
-  if (!rows.length) return []
-  const content = await mysqlGetProductContentMap()
-  return rows.map((row) => mergeOverlay(mapCatalogProductRow(row), content.get(String(row.id))))
+  const [rows] = await pool.query<CatalogProductRow[]>(
+    `SELECT id, slug, name, product_type, description, details, price, compare_at, manufacturer,
+            category_id, category_name, featured, in_stock, created_on
+     FROM accord_nx_products ORDER BY name ASC`,
+  )
+  return rows.map(mapCatalogProductRow)
 }
 
 export async function mysqlCatalogImportStats() {
@@ -1042,13 +1080,19 @@ export async function mysqlCatalogImportStats() {
 }
 
 export async function mysqlIsLocalCatalogReady() {
+  const state = mysqlState()
+  if (state.localCatalogReady && Date.now() - state.localCatalogReady.at < 30_000) {
+    return state.localCatalogReady.ready
+  }
   await ensureMysqlSchema()
   const pool = await getPool()
   const [rows] = await pool.query<RowDataPacket[]>(
     'SELECT use_local_catalog FROM accord_nx_site_settings WHERE id = ? LIMIT 1',
     ['default'],
   )
-  return Boolean(rows[0]?.use_local_catalog)
+  const ready = Boolean(rows[0]?.use_local_catalog)
+  state.localCatalogReady = { at: Date.now(), ready }
+  return ready
 }
 
 export async function mysqlSetLocalCatalogReady(ready: boolean) {
@@ -1058,4 +1102,5 @@ export async function mysqlSetLocalCatalogReady(ready: boolean) {
     `UPDATE accord_nx_site_settings SET use_local_catalog = ?, updated_at = ? WHERE id = ?`,
     [ready ? 1 : 0, new Date(), 'default'],
   )
+  mysqlState().localCatalogReady = { at: Date.now(), ready }
 }

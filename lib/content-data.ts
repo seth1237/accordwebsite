@@ -23,6 +23,7 @@ import {
   mysqlDeleteDoc,
   mysqlGetCatalogue,
   mysqlGetDoc,
+  mysqlGetDocByPayloadFrom,
   mysqlGetDocBySlug,
   mysqlInsertDoc,
   mysqlListCatalogues,
@@ -675,8 +676,7 @@ export async function getRedirectByFrom(from: string): Promise<RedirectRule | nu
   const path = normalizePath(from)
   if (!path) return null
   if (isMysqlConfigured()) {
-    const items = await mysqlListDocs<RedirectRule>('redirect')
-    return items.find((item) => item.from === path) || null
+    return mysqlGetDocByPayloadFrom<RedirectRule>('redirect', path)
   }
   if (!isMongoConfigured()) return null
   await ensureIndexes()
@@ -697,7 +697,7 @@ export async function createRedirect(input: { from: string; to: string; status?:
   const from = normalizePath(input.from)
   const to = input.to.startsWith('http') ? input.to : normalizePath(input.to) || '/'
   const status = input.status === 302 ? 302 : 301
-  if (isMysqlConfigured()) return mysqlInsertDoc<RedirectRule>('redirect', { from, to, status, published: true })
+  if (isMysqlConfigured()) return mysqlInsertDoc<RedirectRule>('redirect', { from, to, status, published: true, slug: from })
   await ensureIndexes()
   const now = new Date()
   const doc = { from, to, status, createdAt: now, updatedAt: now }
@@ -735,14 +735,16 @@ export async function deleteRedirect(id: string): Promise<RedirectRule | null> {
 
 export async function resolveRedirect(pathname: string): Promise<{ to: string; status: number } | null> {
   const path = normalizePath(pathname)
-  const mapped = await getRedirectByFrom(path).catch(() => null)
-  if (mapped) return { to: mapped.to, status: mapped.status }
+  if (!path || path === '/') return null
+  if (path === '/json' || path.startsWith('/json/')) return null
   if (path.startsWith('/product-category/')) {
     return { to: `/category/${path.slice('/product-category/'.length)}`, status: 301 }
   }
   if (path.startsWith('/product-tag/')) {
     return { to: '/products', status: 301 }
   }
+  const mapped = await getRedirectByFrom(path).catch(() => null)
+  if (mapped) return { to: mapped.to, status: mapped.status }
   return null
 }
 
