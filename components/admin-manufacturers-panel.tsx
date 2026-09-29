@@ -68,7 +68,7 @@ export function AdminManufacturersPanel({ items }: { items: ManufacturerSubmissi
     <>
       <header className="admin-header">
         <div>
-          <span className="admin-eyebrow">Tarumed content manager</span>
+          <span className="admin-eyebrow">Accord Medical Supplies</span>
           <h1>Manufacturers</h1>
         </div>
         <input

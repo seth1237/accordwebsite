@@ -87,8 +87,8 @@ a, button, .button, .wa-button, .chip, .product-card, .category-link, .admin-nav
   --hdr-line: color-mix(in srgb, var(--hdr-ink) 12%, transparent);
   --hdr-surface: var(--hdr-white, #fff);
   --hdr-tint: color-mix(in srgb, var(--hdr-accent) 6%, var(--hdr-surface));
-  --hdr-row: 116px;
-  --hdr-row-scrolled: 104px;
+  --hdr-row: 92px;
+  --hdr-row-scrolled: 80px;
   --hdr-topline: 34px;
   --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
   --t-fast: 160ms;
@@ -212,7 +212,7 @@ a, button, .button, .wa-button, .chip, .product-card, .category-link, .admin-nav
   }
   .site-header.is-scrolled .header-row { height: var(--hdr-row-scrolled); }
   .header-row > :first-child { flex: none; } /* logo is never squeezed or scaled */
-  .logo-img { height: 100px; width: 300px; max-width: 300px; }
+  .logo-img { height: 72px; width: 216px; max-width: 216px; }
 
   .main-nav {
     display: flex;

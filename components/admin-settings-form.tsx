@@ -30,7 +30,7 @@ export function AdminSettingsForm({ showPrices }: { showPrices: boolean }) {
     <>
       <header className="admin-header">
         <div>
-          <span className="admin-eyebrow">Tarumed content manager</span>
+          <span className="admin-eyebrow">Accord Medical Supplies</span>
           <h1>Settings</h1>
         </div>
       </header>

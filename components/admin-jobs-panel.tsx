@@ -67,7 +67,7 @@ export function AdminJobsPanel({ jobs }: { jobs: JobPost[] }) {
     <>
       <header className="admin-header">
         <div>
-          <span className="admin-eyebrow">Tarumed content manager</span>
+          <span className="admin-eyebrow">Accord Medical Supplies</span>
           <h1>Jobs</h1>
         </div>
         <button type="button" className="button button-primary" onClick={() => { setSelectedId('new'); setMessage('') }}>

@@ -27,7 +27,7 @@ export default async function AdminOverviewPage() {
     <>
       <header className="admin-header">
         <div>
-          <span className="admin-eyebrow">Tarumed content manager</span>
+          <span className="admin-eyebrow">Accord Medical Supplies</span>
           <h1>Overview</h1>
         </div>
         <div className="admin-user"><span className="status-dot" /> ERP connected</div>
