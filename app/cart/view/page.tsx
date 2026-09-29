@@ -2,8 +2,7 @@ import { SiteFooter } from '@/components/site-footer'
 import { SiteHeader } from '@/components/site-header'
 import { QuoteCartPanel } from '@/components/quote-cart-panel'
 import { QuoteInterestCarousel } from '@/components/quote-interest-carousel'
-import { getCatalog, getPriceVisibility } from '@/lib/catalog-data'
-import { listCatalogues } from '@/lib/content-data'
+import { getCatalog, getPriceVisibility, listCatalogues } from '@/lib/site-data'
 
 export const dynamic = 'force-dynamic'
 

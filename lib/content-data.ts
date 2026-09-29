@@ -1,4 +1,3 @@
-import 'server-only'
 import { createHash, randomBytes } from 'node:crypto'
 import { ObjectId } from 'mongodb'
 import { slugifyName } from '@/lib/catalog'

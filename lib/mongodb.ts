@@ -1,4 +1,3 @@
-import 'server-only'
 import { MongoClient, ObjectId, type Collection, type Db } from 'mongodb'
 import type { JobImage, JobPost } from '@/lib/jobs'
 import {

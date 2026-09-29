@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { SiteFooter } from '@/components/site-footer'
 import { SiteHeader } from '@/components/site-header'
 import { installationHref } from '@/lib/content'
-import { listInstallations } from '@/lib/content-data'
+import { listInstallations } from '@/lib/site-data'
 
 export const dynamic = 'force-dynamic'
 

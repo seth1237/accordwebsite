@@ -2,7 +2,8 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { Catalog } from '@/lib/catalog'
 
-const cacheFile = path.join(process.cwd(), '.cache', 'catalog.json')
+const cacheRoot = process.cwd().endsWith('backend') ? path.join(process.cwd(), '..') : process.cwd()
+const cacheFile = path.join(cacheRoot, '.cache', 'catalog.json')
 
 let memory: Catalog | null = null
 

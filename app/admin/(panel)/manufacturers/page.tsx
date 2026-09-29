@@ -1,5 +1,5 @@
 import { AdminManufacturersPanel } from '@/components/admin-manufacturers-panel'
-import { listManufacturers } from '@/lib/content-data'
+import { listManufacturers } from '@/lib/site-data'
 
 export const dynamic = 'force-dynamic'
 

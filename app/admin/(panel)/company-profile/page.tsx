@@ -1,6 +1,6 @@
 import { AdminCompanyProfilePdf } from '@/components/admin-company-profile-pdf'
 import { AdminRecordsPanel } from '@/components/admin-records-panel'
-import { listCompanyProfilePages } from '@/lib/content-data'
+import { listCompanyProfilePages } from '@/lib/site-data'
 
 export const dynamic = 'force-dynamic'
 

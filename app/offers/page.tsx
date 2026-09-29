@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { SiteFooter } from '@/components/site-footer'
 import { SiteHeader } from '@/components/site-header'
-import { listOffers } from '@/lib/content-data'
+import { listOffers } from '@/lib/site-data'
 
 export const dynamic = 'force-dynamic'
 

@@ -1,9 +1,8 @@
 import Link from 'next/link'
-import { listOffers } from '@/lib/content-data'
+import { getSiteBootstrap } from '@/lib/site-data'
 
 export async function OfferBanner() {
-  const offers = await listOffers(true).catch(() => [])
-  const offer = offers[0]
+  const { offer } = await getSiteBootstrap().catch(() => ({ offer: null }))
   if (!offer) return null
   return (
     <section className="offer-banner">

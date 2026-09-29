@@ -3,7 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "next dev -H 0.0.0.0",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:all": "npx --yes concurrently -k -n api,web -c cyan,magenta \"npm --prefix backend run dev\" \"next dev\"",
+    "start:backend": "npm --prefix backend run start",
     "build": "next build",
     "start": "next start",
     "start:prod": "NODE_ENV=production next start"

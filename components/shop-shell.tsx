@@ -1,6 +1,6 @@
 import { CategorySidebar } from '@/components/category-sidebar'
 import { buildNavCategories } from '@/lib/catalog'
-import { getCatalog } from '@/lib/catalog-data'
+import { getCatalog } from '@/lib/site-data'
 
 export async function ShopShell({
   children,

@@ -1,6 +1,5 @@
 import { BarChart3, MousePointerClick, Share2 } from 'lucide-react'
-import { getCatalog } from '@/lib/catalog-data'
-import { getCategoryPerformance } from '@/lib/mongodb'
+import { getCatalog, getCategoryPerformance } from '@/lib/site-data'
 import { formatKes, productImageSrc } from '@/lib/catalog'
 
 export default async function AdminPerformancePage() {

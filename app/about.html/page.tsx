@@ -4,7 +4,7 @@ import { SiteHeader } from '@/components/site-header'
 import { CompanyProfileBook } from '@/components/company-profile-book'
 import { ROUTES } from '@/lib/routes'
 import { COMPANY } from '@/lib/utils'
-import { listCompanyProfilePages } from '@/lib/content-data'
+import { listCompanyProfilePages } from '@/lib/site-data'
 import { defaultCompanyProfilePages } from '@/lib/profile'
 
 const services = [

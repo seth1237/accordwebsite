@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { SiteFooter } from '@/components/site-footer'
 import { SiteHeader } from '@/components/site-header'
-import { getInstallationBySlug } from '@/lib/content-data'
+import { getInstallationBySlug } from '@/lib/site-data'
 import { ROUTES } from '@/lib/routes'
 import { COMPANY } from '@/lib/utils'
 

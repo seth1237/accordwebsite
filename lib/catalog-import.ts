@@ -1,11 +1,8 @@
-import 'server-only'
-
 import { ACCORD_CATALOG_URL, ACCORD_SHOP_URL, fetchAccordProducts } from '@/lib/accord-shop'
 import {
   mysqlCatalogImportStats,
   mysqlCatalogProductIds,
   mysqlProductHasDetails,
-  mysqlIsLocalCatalogReady,
   mysqlListSourceUrls,
   mysqlSaveFile,
   mysqlSetLocalCatalogReady,
@@ -145,10 +142,9 @@ export async function importCatalogBatch(limit = 6): Promise<CatalogImportBatchR
 
 export async function catalogImportStatus() {
   const stats = await mysqlCatalogImportStats()
-  const ready = await mysqlIsLocalCatalogReady().catch(() => false)
   return {
     source: process.env.CATALOG_SOURCE_URL || ACCORD_CATALOG_URL,
-    usingLocalCatalog: ready && stats.products > 0 && process.env.CATALOG_SOURCE !== 'remote',
+    usingLocalCatalog: stats.products > 0 && process.env.CATALOG_SOURCE !== 'remote',
     stats,
   }
 }

@@ -1,7 +1,6 @@
 import { BarChart3, ImagePlus, MousePointerClick, Package, Share2 } from 'lucide-react'
 import { productImageSrc } from '@/lib/catalog'
-import { getCatalog } from '@/lib/catalog-data'
-import { getCategoryPerformance } from '@/lib/mongodb'
+import { getCatalog, getCategoryPerformance } from '@/lib/site-data'
 
 export default async function AdminOverviewPage() {
   const catalog = await getCatalog()

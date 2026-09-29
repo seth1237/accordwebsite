@@ -1,5 +1,3 @@
-import 'server-only'
-
 import { toProduct, type CatalogProduct, type ShopItem } from '@/lib/catalog'
 
 export const ACCORD_SHOP_URL = 'https://accordmedical.co.ke'

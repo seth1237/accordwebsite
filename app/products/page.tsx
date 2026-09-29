@@ -3,8 +3,7 @@ import { SiteFooter } from '@/components/site-footer'
 import { SiteHeader } from '@/components/site-header'
 import { CatalogBrowser } from '@/components/catalog-browser'
 import { ShopShell } from '@/components/shop-shell'
-import { getCatalog, getPriceVisibility } from '@/lib/catalog-data'
-import { listCatalogues } from '@/lib/content-data'
+import { getCatalog, getPriceVisibility, listCatalogues } from '@/lib/site-data'
 
 export const dynamic = 'force-dynamic'
 

@@ -1,10 +1,10 @@
 import Link from 'next/link'
-import { listJobs } from '@/lib/mongodb'
+import { siteJobCount } from '@/lib/site-data'
 import { ROUTES } from '@/lib/routes'
 import { COMPANY } from '@/lib/utils'
 
 export async function SiteFooter() {
-  const jobCount = (await listJobs(true).catch(() => [])).length
+  const jobCount = await siteJobCount().catch(() => 0)
   return (
     <footer>
       <div className="shell footer-split">

@@ -1,5 +1,5 @@
 import { AdminProductsPanel } from '@/components/admin-products-panel'
-import { getCatalog } from '@/lib/catalog-data'
+import { getCatalog } from '@/lib/site-data'
 
 export default async function AdminImagesPage() {
   const catalog = await getCatalog()

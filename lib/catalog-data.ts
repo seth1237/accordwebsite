@@ -1,5 +1,3 @@
-import 'server-only'
-
 import { cache } from 'react'
 import { lastCatalog, readDevCatalogCache, writeDevCatalogCache } from '@/lib/catalog-cache'
 import { fetchAccordProducts } from '@/lib/accord-shop'
@@ -11,7 +9,7 @@ import {
   type CatalogProduct,
 } from '@/lib/catalog'
 import { getProductMetricsMap, getProductContentMap, getSiteSettings, type ProductContent } from '@/lib/mongodb'
-import { isMysqlConfigured, mysqlIsLocalCatalogReady, mysqlListCatalogProducts } from '@/lib/mysql'
+import { isMysqlConfigured, mysqlListCatalogProducts, mysqlSetLocalCatalogReady } from '@/lib/mysql'
 
 function catalogSource() {
   const value = String(process.env.CATALOG_SOURCE || 'auto').trim().toLowerCase()
@@ -24,9 +22,16 @@ async function loadRawProducts(): Promise<CatalogProduct[]> {
   const source = catalogSource()
   if (source === 'remote') return fetchAccordProducts().catch(() => [] as CatalogProduct[])
   if (isMysqlConfigured()) {
-    if (source === 'mysql') return mysqlListCatalogProducts().catch(() => [] as CatalogProduct[])
-    const ready = await mysqlIsLocalCatalogReady().catch(() => false)
-    if (ready) return mysqlListCatalogProducts().catch(() => [] as CatalogProduct[])
+    try {
+      const local = await mysqlListCatalogProducts()
+      if (local.length) {
+        void mysqlSetLocalCatalogReady(true)
+        return local
+      }
+      if (source === 'mysql') return local
+    } catch {
+      if (source === 'mysql') return []
+    }
   }
   return fetchAccordProducts().catch(() => [] as CatalogProduct[])
 }
@@ -102,6 +107,18 @@ export async function getCatalog(categoryIds?: string[]): Promise<Catalog> {
   const state = catalogMemoState()
   if (state.memo && state.memo.key === key && Date.now() - state.memo.at < CATALOG_TTL_MS) {
     return state.memo.catalog
+  }
+
+  const cached = !categoryIds?.length ? (lastCatalog() || (await readDevCatalogCache())) : null
+  if (cached?.products.length) {
+    state.memo = { key, at: Date.now(), catalog: cached }
+    if (!state.inflight.has(key)) {
+      const refresh = loadCatalog(key, categoryIds).finally(() => {
+        state.inflight.delete(key)
+      })
+      state.inflight.set(key, refresh)
+    }
+    return cached
   }
 
   const pending = state.inflight.get(key)

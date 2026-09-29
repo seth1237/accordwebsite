@@ -1,6 +1,5 @@
 import { AdminCataloguesPanel } from '@/components/admin-catalogues-panel'
-import { getCatalog } from '@/lib/catalog-data'
-import { catalogueAnalytics } from '@/lib/content-data'
+import { catalogueAnalytics, getCatalog } from '@/lib/site-data'
 
 export const dynamic = 'force-dynamic'
 

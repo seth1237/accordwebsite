@@ -1,6 +1,6 @@
 import { SiteFooter } from '@/components/site-footer'
 import { SiteHeader } from '@/components/site-header'
-import { listEvents } from '@/lib/content-data'
+import { listEvents } from '@/lib/site-data'
 
 export const dynamic = 'force-dynamic'
 

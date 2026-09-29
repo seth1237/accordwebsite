@@ -1,3 +1,4 @@
+import { accordApiPath } from '@/lib/backend-url'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
@@ -67,7 +68,7 @@ export async function proxy(request: NextRequest) {
 
   if (shouldLookup(pathname)) {
     try {
-      const lookup = new URL('/api/redirects/lookup', request.url)
+      const lookup = new URL(accordApiPath('/api/redirects/lookup'))
       lookup.searchParams.set('from', pathname)
       const response = await fetch(lookup, {
         headers: { cookie: request.headers.get('cookie') || '' },

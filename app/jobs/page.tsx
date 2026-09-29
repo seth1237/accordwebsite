@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { SiteFooter } from '@/components/site-footer'
 import { SiteHeader } from '@/components/site-header'
 import { jobHref } from '@/lib/jobs'
-import { listJobs } from '@/lib/mongodb'
+import { listJobs } from '@/lib/site-data'
 
 export const dynamic = 'force-dynamic'
 

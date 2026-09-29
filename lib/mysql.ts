@@ -1,8 +1,9 @@
-import 'server-only'
-
+import { setDefaultResultOrder } from 'node:dns'
 import mysql, { type Pool, type ResultSetHeader, type RowDataPacket } from 'mysql2/promise'
 import type { Catalogue, CatalogueDownload, CompanyProfilePage, MediaAsset } from '@/lib/content'
 import type { CatalogProduct } from '@/lib/catalog'
+
+setDefaultResultOrder('ipv4first')
 
 type AdminUser = {
   _id?: string
@@ -91,6 +92,25 @@ export function mysqlFileIdFromPublicId(publicId: string) {
   return match ? Number(match[1]) : null
 }
 
+function isMysqlFatal(error: unknown) {
+  const err = error as { code?: string; fatal?: boolean }
+  return Boolean(err.fatal)
+    || err.code === 'PROTOCOL_CONNECTION_LOST'
+    || err.code === 'PROTOCOL_ENQUEUE_AFTER_FATAL_ERROR'
+    || err.code === 'ECONNRESET'
+}
+
+async function resetMysqlPool() {
+  const state = mysqlState()
+  const pool = state.pool
+  state.pool = null
+  state.schemaReady = false
+  state.schemaVersion = 0
+  state.schemaPromise = null
+  state.localCatalogReady = null
+  if (pool) await pool.end().catch(() => {})
+}
+
 async function getPool(): Promise<Pool> {
   if (!isMysqlConfigured()) throw new Error('MySQL is not configured')
   const state = mysqlState()
@@ -105,8 +125,19 @@ async function getPool(): Promise<Pool> {
     connectionLimit: 8,
     enableKeepAlive: true,
     charset: 'utf8mb4',
+    connectTimeout: 8_000,
   })
   return state.pool
+}
+
+async function withMysqlRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn()
+  } catch (error) {
+    if (!isMysqlFatal(error)) throw error
+    await resetMysqlPool()
+    return fn()
+  }
 }
 
 async function mysqlAddColumnIfMissing(table: string, column: string, definition: string) {
@@ -122,6 +153,10 @@ async function mysqlAddColumnIfMissing(table: string, column: string, definition
 
 async function applyMysqlSchema() {
   const pool = await getPool()
+  try {
+    await pool.query('SELECT 1 FROM accord_nx_products LIMIT 1')
+    return
+  } catch {}
   await pool.query(`
     CREATE TABLE IF NOT EXISTS accord_nx_files (
       id INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -1049,14 +1084,16 @@ export async function mysqlUpsertCatalogProduct(product: CatalogProduct) {
 }
 
 export async function mysqlListCatalogProducts(): Promise<CatalogProduct[]> {
-  await ensureMysqlSchema()
-  const pool = await getPool()
-  const [rows] = await pool.query<CatalogProductRow[]>(
-    `SELECT id, slug, name, product_type, description, details, price, compare_at, manufacturer,
-            category_id, category_name, featured, in_stock, created_on
-     FROM accord_nx_products ORDER BY name ASC`,
-  )
-  return rows.map(mapCatalogProductRow)
+  return withMysqlRetry(async () => {
+    await ensureMysqlSchema()
+    const pool = await getPool()
+    const [rows] = await pool.query<CatalogProductRow[]>(
+      `SELECT id, slug, name, product_type, description, details, price, compare_at, manufacturer,
+              category_id, category_name, featured, in_stock, created_on
+       FROM accord_nx_products ORDER BY name ASC`,
+    )
+    return rows.map(mapCatalogProductRow)
+  })
 }
 
 export async function mysqlCatalogImportStats() {
@@ -1082,13 +1119,9 @@ export async function mysqlIsLocalCatalogReady() {
   if (state.localCatalogReady && Date.now() - state.localCatalogReady.at < 30_000) {
     return state.localCatalogReady.ready
   }
-  await ensureMysqlSchema()
-  const pool = await getPool()
-  const [rows] = await pool.query<RowDataPacket[]>(
-    'SELECT use_local_catalog FROM accord_nx_site_settings WHERE id = ? LIMIT 1',
-    ['default'],
-  )
-  const ready = Boolean(rows[0]?.use_local_catalog)
+  const count = await mysqlCountCatalogProducts().catch(() => 0)
+  const ready = count > 0
+  if (ready) void mysqlSetLocalCatalogReady(true)
   state.localCatalogReady = { at: Date.now(), ready }
   return ready
 }

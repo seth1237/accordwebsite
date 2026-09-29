@@ -1,12 +1,11 @@
 import { SiteHeaderNav } from '@/components/site-header-nav'
-import { getCatalog } from '@/lib/catalog-data'
+import { getCatalog, siteJobCount } from '@/lib/site-data'
 import { buildNavCategories } from '@/lib/catalog'
-import { listJobs } from '@/lib/mongodb'
 
 export async function SiteHeader() {
-  const [catalog, jobs] = await Promise.all([
+  const [catalog, jobCount] = await Promise.all([
     getCatalog(),
-    listJobs(true).catch(() => []),
+    siteJobCount().catch(() => 0),
   ])
   const products = catalog.products.map((product) => ({
     id: product.id,
@@ -16,5 +15,5 @@ export async function SiteHeader() {
     manufacturer: product.manufacturer,
     productType: product.productType,
   }))
-  return <SiteHeaderNav categories={buildNavCategories(catalog, 5).filter((category) => category.slug !== 'uncategorized')} products={products} jobCount={jobs.length} />
+  return <SiteHeaderNav categories={buildNavCategories(catalog, 5).filter((category) => category.slug !== 'uncategorized')} products={products} jobCount={jobCount} />
 }

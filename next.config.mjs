@@ -1,7 +1,20 @@
+import os from 'node:os'
+
 const isProdBuild = process.env.NODE_ENV === 'production' && !process.env.VERCEL
+
+function localDevOrigins() {
+  const origins = new Set(['127.0.0.1', 'localhost'])
+  for (const addrs of Object.values(os.networkInterfaces())) {
+    for (const addr of addrs || []) {
+      if (addr.family === 'IPv4' && !addr.internal) origins.add(addr.address)
+    }
+  }
+  return [...origins]
+}
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  allowedDevOrigins: localDevOrigins(),
   // Standalone is for Docker/VPS production builds only. Skip it in `next dev`
   // and on Vercel (Vercel needs NFT traces such as next-server.js.nft.json).
   ...(isProdBuild ? { output: 'standalone' } : {}),
@@ -21,6 +34,7 @@ const nextConfig = {
       { protocol: 'https', hostname: 'res.cloudinary.com' },
       { protocol: 'https', hostname: 'backend.codewithseth.co.ke' },
       { protocol: 'https', hostname: 'accordmedical.co.ke' },
+      { protocol: 'https', hostname: 'accord.codewithseth.co.ke' },
     ],
   },
   async redirects() {
@@ -57,7 +71,7 @@ const nextConfig = {
   async headers() {
     return [
       {
-        source: '/(.*)',
+        source: '/((?!_next/).*)',
         headers: [
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'X-Frame-Options', value: 'SAMEORIGIN' },

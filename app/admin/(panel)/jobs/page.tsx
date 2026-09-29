@@ -1,5 +1,5 @@
 import { AdminJobsPanel } from '@/components/admin-jobs-panel'
-import { listJobs } from '@/lib/mongodb'
+import { listJobs } from '@/lib/site-data'
 
 export const dynamic = 'force-dynamic'
 

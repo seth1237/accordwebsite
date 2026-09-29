@@ -1,5 +1,5 @@
 import { AdminRecordsPanel } from '@/components/admin-records-panel'
-import { listRedirects } from '@/lib/content-data'
+import { listRedirects } from '@/lib/site-data'
 
 export const dynamic = 'force-dynamic'
 

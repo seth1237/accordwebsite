@@ -1,5 +1,5 @@
 import { AdminRecordsPanel } from '@/components/admin-records-panel'
-import { listOffers } from '@/lib/content-data'
+import { listOffers } from '@/lib/site-data'
 
 export const dynamic = 'force-dynamic'
 

@@ -1,7 +1,6 @@
 import { AdminCatalogImport } from '@/components/admin-catalog-import'
 import { AdminProductsPanel } from '@/components/admin-products-panel'
-import { getCatalog } from '@/lib/catalog-data'
-import { listCatalogues } from '@/lib/content-data'
+import { getCatalog, listCatalogues } from '@/lib/site-data'
 
 export default async function AdminProductsPage() {
   const [catalog, catalogues] = await Promise.all([

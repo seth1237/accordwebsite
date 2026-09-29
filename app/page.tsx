@@ -6,7 +6,7 @@ import { OfferBanner } from '@/components/offer-banner'
 import { ProductCard } from '@/components/product-card'
 import { ShopShell } from '@/components/shop-shell'
 import { homepageProducts } from '@/lib/catalog'
-import { getCatalog, getPriceVisibility } from '@/lib/catalog-data'
+import { getCatalog, getPriceVisibility } from '@/lib/site-data'
 
 export const dynamic = 'force-dynamic'
 
