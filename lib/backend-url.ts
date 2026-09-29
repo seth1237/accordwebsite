@@ -21,14 +21,12 @@ function normalizeApiUrl(url: string) {
 }
 
 function envApiUrl() {
-  return normalizeApiUrl(process.env.ACCORD_API_URL || process.env.NEXT_PUBLIC_ACCORD_API_URL || '')
+  return normalizeApiUrl(process.env.ACCORD_API_URL || '')
 }
 
 export function accordApiUrl() {
   const fromEnv = envApiUrl()
-  const production = process.env.NODE_ENV === 'production'
-
-  if (production) {
+  if (process.env.NODE_ENV === 'production') {
     if (fromEnv) {
       try {
         if (!isLocalHost(new URL(fromEnv).hostname)) return fromEnv
@@ -38,7 +36,6 @@ export function accordApiUrl() {
     }
     return DEPLOYED_ACCORD_API_URL
   }
-
   return fromEnv || LOCAL_ACCORD_API_URL
 }
 
