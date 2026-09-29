@@ -103,8 +103,6 @@ async function getPool(): Promise<Pool> {
     database: process.env.MYSQL_DATABASE,
     waitForConnections: true,
     connectionLimit: 8,
-    queueLimit: 32,
-    connectTimeout: 4000,
     enableKeepAlive: true,
     charset: 'utf8mb4',
   })
