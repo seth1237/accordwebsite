@@ -1315,6 +1315,7 @@ footer { background: #000; color: #dce9e8; padding-top: 36px; view-transition-na
   .blog-page .text-link { margin-top: 16px; }
   .offer-banner-row { flex-direction: column; align-items: flex-start; }
   .about-actions { margin-top: 18px; }
+  .about-map iframe { height: 280px; }
   .profile-sheet { padding: 18px 16px 28px; }
   .profile-sheet h3 { font-size: 18px; }
   .profile-sheet p { font-size: 13px; }
@@ -1375,6 +1376,21 @@ footer { background: #000; color: #dce9e8; padding-top: 36px; view-transition-na
 .about-page .page-title { margin-bottom: 8px; }
 .about-services { margin-top: 36px; }
 .about-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+.about-map {
+  margin-top: 22px;
+  width: 100%;
+  max-width: 920px;
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass);
+}
+.about-map iframe {
+  display: block;
+  width: 100%;
+  height: 450px;
+  border: 0;
+}
 .home-intro { padding: 28px 0 8px; max-width: 740px; }
 .home-topic-links { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 18px; }
 .home-topic-links a { color: var(--navy); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }

@@ -55,6 +55,15 @@ export default async function AboutPage() {
           Eldoret office: {COMPANY.location}. Nairobi warehouse: {COMPANY.warehouse}. For installation and
           after-sales work see biomedical engineering services.
         </p>
+        <div className="about-map">
+          <iframe
+            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d31911.08835626851!2d36.8836608!3d-1.2386304000000001!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x182f11e545daac99%3A0x828f65117605ea08!2sAccord%20Medical%20Supplies%20Limited!5e0!3m2!1sen!2ske!4v1790766478080!5m2!1sen!2ske"
+            title="Accord Medical Supplies Limited on Google Maps"
+            loading="lazy"
+            allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
+          />
+        </div>
         <div className="about-actions">
           <Link href={ROUTES.products} className="button button-primary">Browse products</Link>
           <Link href={ROUTES.contact} className="button button-outline">Talk to us</Link>
