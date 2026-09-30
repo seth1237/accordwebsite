@@ -941,10 +941,91 @@ h1, h2, h3, p { margin: 0; }
   60% { transform: translateY(-2px) rotate(-2deg) scale(1.02); }
   80% { transform: translateY(0) rotate(1.5deg) scale(1.01); }
 }
+.catalogue-dl-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  background: rgba(10, 24, 32, .38);
+  backdrop-filter: blur(6px);
+  animation: catalogue-dl-fade .18s ease;
+}
+.catalogue-dl-card {
+  width: min(280px, calc(100vw - 32px));
+  background: #fff;
+  color: var(--navy);
+  border-radius: 18px;
+  padding: 22px 20px 18px;
+  text-align: center;
+  box-shadow: 0 18px 40px rgba(10, 24, 32, .18);
+}
+.catalogue-dl-card p {
+  margin: 14px 0 0;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+}
+.catalogue-dl-stage {
+  position: relative;
+  height: 88px;
+}
+.catalogue-dl-sheet {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 46px;
+  height: 58px;
+  margin-left: -23px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #f7fbfb, #e7f3f1);
+  border: 1px solid #c5ddda;
+  color: #087f85;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 8px 16px rgba(8, 127, 133, .16);
+  animation: catalogue-dl-sheet .9s cubic-bezier(.22, 1, .36, 1) both;
+}
+.catalogue-dl-tray {
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  width: 88px;
+  height: 10px;
+  margin-left: -44px;
+  border-radius: 99px;
+  background: #e8f1f0;
+  overflow: hidden;
+}
+.catalogue-dl-bar {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: #087f85;
+  animation: catalogue-dl-bar .9s ease .12s forwards;
+}
+@keyframes catalogue-dl-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes catalogue-dl-sheet {
+  0% { transform: translateY(-18px) scale(.92); opacity: 0; }
+  55% { transform: translateY(8px) scale(1); opacity: 1; }
+  100% { transform: translateY(14px) scale(1); opacity: 1; }
+}
+@keyframes catalogue-dl-bar {
+  from { width: 0; }
+  to { width: 100%; }
+}
 @media (prefers-reduced-motion: reduce) {
   .view-catalogue-btn .catalogue-dance { animation: none; }
   .mobile-panel,
   .mobile-backdrop { transition: none; }
+  .catalogue-dl-overlay, .catalogue-dl-sheet, .catalogue-dl-bar { animation: none; }
 }
 .related-section { background: rgba(237, 244, 243, .4); padding: 12px 0 76px; }
 .related-controls { display: flex; gap: 8px; }

@@ -12,7 +12,7 @@ export default async function AdminCataloguesPage() {
     <AdminCataloguesPanel
       catalogues={analytics.catalogues}
       total={analytics.total}
-      products={catalog.products}
+      products={catalog.products || []}
     />
   )
 }

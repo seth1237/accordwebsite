@@ -2,6 +2,7 @@
 
 import { FileText } from 'lucide-react'
 import { slugifyName, type CatalogProduct } from '@/lib/catalog'
+import { CatalogueDownloadLink } from '@/components/catalogue-download'
 
 export function ViewCatalogueButton({
   product,
@@ -30,12 +31,12 @@ export function ViewCatalogueButton({
   }
 
   return (
-    <a
+    <CatalogueDownloadLink
       className={compact ? 'view-catalogue-btn compact' : 'view-catalogue-btn'}
       href={href}
-      download={`${slugifyName(product.name) || 'catalogue'}.pdf`}
+      filename={`${slugifyName(product.name) || 'catalogue'}.pdf`}
     >
       {label}
-    </a>
+    </CatalogueDownloadLink>
   )
 }

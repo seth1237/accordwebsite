@@ -180,8 +180,12 @@ export async function listManufacturers() {
 }
 
 export async function catalogueAnalytics() {
-  const payload = await backendJson<{ data: unknown }>('/api/admin/catalogues')
-  return payload?.data
+  const payload = await backendJson<{ data: { total?: number; catalogues?: Catalogue[]; recent?: unknown[] } }>('/api/admin/catalogues')
+  return {
+    total: Number(payload?.data?.total) || 0,
+    catalogues: payload?.data?.catalogues || [],
+    recent: payload?.data?.recent || [],
+  }
 }
 
 export async function getCategoryPerformance() {

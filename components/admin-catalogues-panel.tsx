@@ -1,9 +1,10 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Catalogue } from '@/lib/content'
 import type { CatalogProduct } from '@/lib/catalog'
+import { CatalogueDownloadLink } from '@/components/catalogue-download'
 
 export function AdminCataloguesPanel({
   catalogues,
@@ -15,8 +16,11 @@ export function AdminCataloguesPanel({
   products: CatalogProduct[]
 }) {
   const router = useRouter()
+  const fileInput = useRef<HTMLInputElement>(null)
   const [message, setMessage] = useState('')
   const [saving, setSaving] = useState(false)
+  const [dragging, setDragging] = useState(false)
+  const [fileName, setFileName] = useState('')
   const [productQuery, setProductQuery] = useState('')
   const [title, setTitle] = useState('')
   const [productId, setProductId] = useState('')
@@ -28,6 +32,23 @@ export function AdminCataloguesPanel({
       q ? `${product.name} ${product.categoryName}`.toLowerCase().includes(q) : true,
     )
   }, [products, productQuery])
+
+  function isPdf(file: File) {
+    return file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+  }
+
+  function assignFile(file: File | undefined) {
+    if (!file) return
+    if (!isPdf(file)) {
+      setMessage('Drop a PDF catalogue')
+      return
+    }
+    const transfer = new DataTransfer()
+    transfer.items.add(file)
+    if (fileInput.current) fileInput.current.files = transfer.files
+    setFileName(file.name)
+    setMessage('')
+  }
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -51,6 +72,7 @@ export function AdminCataloguesPanel({
     setTitle('')
     setProductId('')
     setProductQuery('')
+    setFileName('')
     router.refresh()
   }
 
@@ -108,7 +130,7 @@ export function AdminCataloguesPanel({
         <div className="card-title">
           <div>
             <h3>Upload a machine PDF</h3>
-            <span>Attach one brochure per product. View Catalogue on that product page downloads this file directly.</span>
+            <span>Attach one brochure per product. Drop a PDF here or browse. View Catalogue on that product page downloads this file directly.</span>
           </div>
         </div>
         <label>Search products
@@ -127,7 +149,32 @@ export function AdminCataloguesPanel({
           </select>
         </label>
         <label>Title<input name="title" required value={title} onChange={(event) => setTitle(event.target.value)} /></label>
-        <label>PDF file<input name="file" type="file" accept="application/pdf,.pdf" required /></label>
+        <div
+          className={`admin-dropzone${dragging ? ' is-dragging' : ''}${fileName ? ' has-file' : ''}`}
+          onDragEnter={(event) => { event.preventDefault(); setDragging(true) }}
+          onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; setDragging(true) }}
+          onDragLeave={(event) => {
+            if (event.currentTarget.contains(event.relatedTarget as Node)) return
+            setDragging(false)
+          }}
+          onDrop={(event) => {
+            event.preventDefault()
+            setDragging(false)
+            assignFile(event.dataTransfer.files[0])
+          }}
+        >
+          <input
+            ref={fileInput}
+            className="admin-dropzone-input"
+            name="file"
+            type="file"
+            accept="application/pdf,.pdf"
+            required
+            onChange={(event) => assignFile(event.target.files?.[0])}
+          />
+          <strong>{fileName || (dragging ? 'Drop the PDF now' : 'Drop a PDF here')}</strong>
+          <span>{fileName ? 'Click to replace' : 'or click to browse · PDF up to 20MB'}</span>
+        </div>
         <button className="button button-primary" disabled={saving}>{saving ? 'Uploading…' : 'Save catalogue'}</button>
       </form>
       <div className="admin-card">
@@ -150,7 +197,13 @@ export function AdminCataloguesPanel({
               <small>
                 {item.title}
                 {' · '}
-                <a className="text-link" href={`/api/catalogues/${item._id}/download?productId=${encodeURIComponent(item.erpProductId)}`}>Download</a>
+                <CatalogueDownloadLink
+                  className="text-link"
+                  href={`/api/catalogues/${item._id}/download?productId=${encodeURIComponent(item.erpProductId)}`}
+                  filename={`${item.productName || item.title || 'catalogue'}.pdf`}
+                >
+                  Download
+                </CatalogueDownloadLink>
                 {' · '}
                 <button type="button" className="text-link" onClick={() => remove(item._id)}>Delete</button>
               </small>

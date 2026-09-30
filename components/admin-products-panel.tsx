@@ -6,6 +6,7 @@ import { Trash2 } from 'lucide-react'
 import type { CatalogCategory, CatalogProduct } from '@/lib/catalog'
 import { formatKes, productImageSrc, slugifyName } from '@/lib/catalog'
 import type { Catalogue } from '@/lib/content'
+import { CatalogueDownloadLink } from '@/components/catalogue-download'
 
 const PAGE_SIZE = 10
 
@@ -353,7 +354,13 @@ export function AdminProductsPanel({
                         <small>
                           PDF: {catalogueFor(product.id)?.title}
                           {' · '}
-                          <a className="text-link" href={`/api/catalogues/${catalogueFor(product.id)?._id}/download?productId=${encodeURIComponent(product.id)}`}>Download</a>
+                          <CatalogueDownloadLink
+                            className="text-link"
+                            href={`/api/catalogues/${catalogueFor(product.id)?._id}/download?productId=${encodeURIComponent(product.id)}`}
+                            filename={`${product.name || 'catalogue'}.pdf`}
+                          >
+                            Download
+                          </CatalogueDownloadLink>
                           {' · '}
                           <button
                             type="button"
