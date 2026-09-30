@@ -108,6 +108,15 @@ const LIVE_CATEGORY_SLUGS: Record<string, string> = {
 const CATEGORY_SLUG_ALIASES: Record<string, string> = {
   ...LIVE_CATEGORY_SLUGS,
   'hosptital-furniture': 'furniture',
+  'operating-theatre-equipment': 'theatre-intensive-care-unit',
+  'theatre-and-intensive-care-unit-icu-equipment': 'theatre-intensive-care-unit',
+  'hospital-furniture': 'furniture',
+  'laboratory-equipment': 'laboratory',
+  'maternity-equipment': 'maternity',
+  'imaging-equipment': 'imaging',
+  'renal-equipment': 'renal',
+  'dental-equipment': 'dental',
+  'homecare-equipment': 'homecare',
 }
 
 export function publicCategorySlug(nameOrSlug: string) {

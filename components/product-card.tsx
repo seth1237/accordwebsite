@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ArrowRight } from 'lucide-react'
 import { ROUTES } from '@/lib/routes'
 import { PLACEHOLDER_IMAGE, productHref, productImageSrc, type CatalogProduct } from '@/lib/catalog'
+import { productImageAlt } from '@/lib/seo'
 import type { Catalogue } from '@/lib/content'
 import { useQuoteCart } from '@/components/quote-cart'
 
@@ -31,7 +32,7 @@ export function ProductCard({
         <div className="product-image">
           <img
             src={productImageSrc(product)}
-            alt={product.name}
+            alt={productImageAlt(product)}
             onError={(event) => {
               if (!event.currentTarget.src.endsWith(PLACEHOLDER_IMAGE)) {
                 event.currentTarget.src = PLACEHOLDER_IMAGE

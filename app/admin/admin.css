@@ -185,6 +185,11 @@
 .admin-mfr-row b { font-size: 14px; color: #123744; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .admin-mfr-products { color: #60767d; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .admin-mfr-status { font-size: 12px; font-weight: 700; text-transform: capitalize; color: #087f85; }
+.visitor-day-list { display: grid; gap: 12px; }
+.visitor-day-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.visitor-day-head b { color: #123744; font-size: 14px; }
+.visitor-day-head strong { color: #087f85; font-size: 16px; }
+.visitor-day small { color: #60767d; font-size: 12px; }
 @media (max-width: 800px) {
   .admin-shell { display: block; }
   .admin-sidebar { width: auto; height: auto; position: static; }

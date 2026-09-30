@@ -12,6 +12,7 @@ export const ROUTES = {
   offers: '/offers',
   manufacturers: '/manufacturers',
   manufacturersApply: '/manufacturers/apply',
+  biomedical: '/biomedical-engineering-services.html',
 } as const
 
 export function vacancyHref(slug: string) {

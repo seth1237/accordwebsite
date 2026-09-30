@@ -1,10 +1,21 @@
 import Link from 'next/link'
+import type { Metadata } from 'next'
 import { SiteFooter } from '@/components/site-footer'
 import { SiteHeader } from '@/components/site-header'
 import { installationHref } from '@/lib/content'
+import { pageMetadata } from '@/lib/seo'
+import { ROUTES } from '@/lib/routes'
 import { listInstallations } from '@/lib/site-data'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = pageMetadata({
+  title: 'Hospital Equipment Installations & Projects | Accord Medical',
+  description:
+    'Recent medical equipment installations by Accord Medical Supplies for hospitals and clinics in Kenya, including maternity, laboratory and theatre projects.',
+  path: ROUTES.projects,
+  absoluteTitle: true,
+})
 
 export default async function ProjectsPage() {
   const items = await listInstallations(true).catch(() => [])
@@ -21,11 +32,11 @@ export default async function ProjectsPage() {
           {items.map((item) => (
             <Link key={item._id} href={installationHref(item)} className="job-card">
               <div className="job-card-image">
-                {item.cover ? <img src={item.cover.secureUrl} alt="" /> : <span />}
+                {item.cover ? <img src={item.cover.secureUrl} alt={item.title} /> : <span />}
               </div>
               <div className="job-card-body">
                 <span className="job-meta">{item.facility} · {item.location}</span>
-                <h3>{item.title}</h3>
+                <h2>{item.title}</h2>
                 <p>{item.body.slice(0, 140)}{item.body.length > 140 ? '…' : ''}</p>
               </div>
             </Link>

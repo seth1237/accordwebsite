@@ -31,7 +31,7 @@ type SiteSettings = {
   updatedAt: Date
 }
 
-const MYSQL_SCHEMA_VERSION = 3
+const MYSQL_SCHEMA_VERSION = 4
 
 type MysqlState = {
   pool: Pool | null
@@ -207,14 +207,16 @@ async function mysqlAddColumnIfMissing(table: string, column: string, definition
 
 async function applyMysqlSchema() {
   const pool = await getPool()
+  let productsExist = false
   try {
     await pool.query('SELECT 1 FROM accord_nx_products LIMIT 1')
-    return
+    productsExist = true
   } catch (error) {
     const code = (error as { code?: string }).code
     if (code !== 'ER_NO_SUCH_TABLE' && code !== 'ER_BAD_TABLE_ERROR') throw error
   }
-  await pool.query(`
+  if (!productsExist) {
+    await pool.query(`
     CREATE TABLE IF NOT EXISTS accord_nx_files (
       id INT UNSIGNED NOT NULL AUTO_INCREMENT,
       kind VARCHAR(32) NOT NULL,
@@ -227,7 +229,7 @@ async function applyMysqlSchema() {
       KEY kind_owner (kind, owner_key)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
   `)
-  await pool.query(`
+    await pool.query(`
     CREATE TABLE IF NOT EXISTS accord_nx_admins (
       id INT UNSIGNED NOT NULL AUTO_INCREMENT,
       username VARCHAR(191) NOT NULL,
@@ -241,7 +243,7 @@ async function applyMysqlSchema() {
       UNIQUE KEY email (email)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
   `)
-  await pool.query(`
+    await pool.query(`
     CREATE TABLE IF NOT EXISTS accord_nx_catalogues (
       id INT UNSIGNED NOT NULL AUTO_INCREMENT,
       title VARCHAR(255) NOT NULL,
@@ -257,7 +259,7 @@ async function applyMysqlSchema() {
       KEY download_count (download_count)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
   `)
-  await pool.query(`
+    await pool.query(`
     CREATE TABLE IF NOT EXISTS accord_nx_catalogue_downloads (
       id INT UNSIGNED NOT NULL AUTO_INCREMENT,
       catalogue_id INT UNSIGNED NOT NULL,
@@ -269,7 +271,7 @@ async function applyMysqlSchema() {
       KEY catalogue_created (catalogue_id, created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
   `)
-  await pool.query(`
+    await pool.query(`
     CREATE TABLE IF NOT EXISTS accord_nx_product_content (
       erp_product_id VARCHAR(64) NOT NULL,
       details MEDIUMTEXT NOT NULL,
@@ -278,7 +280,7 @@ async function applyMysqlSchema() {
       PRIMARY KEY (erp_product_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
   `)
-  await pool.query(`
+    await pool.query(`
     CREATE TABLE IF NOT EXISTS accord_nx_site_settings (
       id VARCHAR(32) NOT NULL,
       show_prices TINYINT(1) NOT NULL DEFAULT 1,
@@ -286,7 +288,7 @@ async function applyMysqlSchema() {
       PRIMARY KEY (id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
   `)
-  await pool.query(`
+    await pool.query(`
     CREATE TABLE IF NOT EXISTS accord_nx_docs (
       id INT UNSIGNED NOT NULL AUTO_INCREMENT,
       kind VARCHAR(64) NOT NULL,
@@ -300,7 +302,7 @@ async function applyMysqlSchema() {
       KEY kind_published (kind, published, created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
   `)
-  await pool.query(`
+    await pool.query(`
     CREATE TABLE IF NOT EXISTS accord_nx_product_performance (
       erp_product_id VARCHAR(64) NOT NULL,
       product_name VARCHAR(255) NOT NULL DEFAULT '',
@@ -315,7 +317,7 @@ async function applyMysqlSchema() {
       PRIMARY KEY (erp_product_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
   `)
-  await pool.query(`
+    await pool.query(`
     CREATE TABLE IF NOT EXISTS accord_nx_product_journeys (
       from_product_id VARCHAR(64) NOT NULL,
       to_product_id VARCHAR(64) NOT NULL,
@@ -325,7 +327,7 @@ async function applyMysqlSchema() {
       PRIMARY KEY (from_product_id, to_product_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
   `)
-  await pool.query(`
+    await pool.query(`
     CREATE TABLE IF NOT EXISTS accord_nx_products (
       id VARCHAR(64) NOT NULL,
       slug VARCHAR(191) NOT NULL,
@@ -348,8 +350,20 @@ async function applyMysqlSchema() {
       KEY category_id (category_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
   `)
+  }
   await mysqlAddColumnIfMissing('accord_nx_files', 'source_url', `source_url VARCHAR(512) NOT NULL DEFAULT ''`)
   await mysqlAddColumnIfMissing('accord_nx_site_settings', 'use_local_catalog', `use_local_catalog TINYINT(1) NOT NULL DEFAULT 0`)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS accord_nx_site_visits (
+      visit_date DATE NOT NULL,
+      visitor_id VARCHAR(64) NOT NULL,
+      path VARCHAR(255) NOT NULL,
+      hits INT NOT NULL DEFAULT 1,
+      last_seen_at DATETIME NOT NULL,
+      PRIMARY KEY (visit_date, visitor_id, path),
+      KEY visit_date (visit_date)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+  `)
 }
 
 export async function ensureMysqlSchema() {
@@ -1191,4 +1205,67 @@ export async function mysqlSetLocalCatalogReady(ready: boolean) {
     [ready ? 1 : 0, new Date(), 'default'],
   )
   mysqlState().localCatalogReady = { at: Date.now(), ready }
+}
+
+function nairobiDate(value = new Date()) {
+  return value.toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' })
+}
+
+export function sanitizeVisitPath(value: unknown) {
+  const raw = String(value || '').trim()
+  if (!raw.startsWith('/')) return ''
+  const path = raw.split('?')[0].split('#')[0].replace(/\/{2,}/g, '/').slice(0, 255)
+  if (!path || path.startsWith('/admin') || path.startsWith('/api') || path.startsWith('/_next')) return ''
+  return path
+}
+
+export function sanitizeVisitorId(value: unknown) {
+  const id = String(value || '').trim()
+  return /^[a-z0-9-]{8,64}$/i.test(id) ? id : ''
+}
+
+export async function mysqlRecordSiteVisit(input: { visitorId: string; path: string }) {
+  const visitorId = sanitizeVisitorId(input.visitorId)
+  const path = sanitizeVisitPath(input.path)
+  if (!visitorId || !path) return
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const now = new Date()
+  await pool.query(
+    `INSERT INTO accord_nx_site_visits (visit_date, visitor_id, path, hits, last_seen_at)
+     VALUES (?, ?, ?, 1, ?)
+     ON DUPLICATE KEY UPDATE hits = hits + 1, last_seen_at = VALUES(last_seen_at)`,
+    [nairobiDate(now), visitorId, path, now],
+  )
+}
+
+export type VisitorDay = {
+  date: string
+  visitors: number
+  pageviews: number
+}
+
+export async function mysqlGetVisitorStats(days = 90): Promise<{ today: VisitorDay; days: VisitorDay[] }> {
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const today = nairobiDate()
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT DATE_FORMAT(visit_date, '%Y-%m-%d') AS visit_date,
+            COUNT(DISTINCT visitor_id) AS visitors,
+            SUM(hits) AS pageviews
+     FROM accord_nx_site_visits
+     WHERE visit_date >= DATE_SUB(?, INTERVAL ? DAY)
+     GROUP BY visit_date
+     ORDER BY visit_date DESC`,
+    [today, Math.max(1, Math.min(365, days))],
+  )
+  const list: VisitorDay[] = rows.map((row) => ({
+    date: String(row.visit_date),
+    visitors: Number(row.visitors) || 0,
+    pageviews: Number(row.pageviews) || 0,
+  }))
+  return {
+    today: list.find((row) => row.date === today) || { date: today, visitors: 0, pageviews: 0 },
+    days: list,
+  }
 }

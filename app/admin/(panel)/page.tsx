@@ -1,11 +1,13 @@
-import { BarChart3, ImagePlus, MousePointerClick, Package, Share2 } from 'lucide-react'
+import { BarChart3, Eye, MousePointerClick, Package, Share2 } from 'lucide-react'
 import { productImageSrc } from '@/lib/catalog'
-import { getCatalog, getCategoryPerformance } from '@/lib/site-data'
+import { getCatalog, getCategoryPerformance, getVisitorStats } from '@/lib/site-data'
 
 export default async function AdminOverviewPage() {
-  const catalog = await getCatalog()
-  const categoryPerformance = await getCategoryPerformance().catch(() => [])
-  const withImages = catalog.products.filter((product) => product.imageAssets.length > 0 || product.images.length > 0).length
+  const [catalog, categoryPerformance, visitors] = await Promise.all([
+    getCatalog(),
+    getCategoryPerformance().catch(() => []),
+    getVisitorStats().catch(() => ({ today: { date: '', visitors: 0, pageviews: 0 }, days: [] })),
+  ])
   const totalClicks = catalog.products.reduce((sum, product) => sum + (product.clicks || 0), 0)
   const totalShares = catalog.products.reduce((sum, product) => sum + (product.shares || 0), 0)
   const byId = new Map(categoryPerformance.map((item) => [item.categoryId, item]))
@@ -33,7 +35,7 @@ export default async function AdminOverviewPage() {
       </header>
       <div className="admin-stats">
         <div><Package /><span><b>{catalog.products.length}</b><small>ERP products</small></span></div>
-        <div><ImagePlus /><span><b>{withImages}</b><small>With photos</small></span></div>
+        <div><Eye /><span><b>{visitors.today.visitors}</b><small>Visitors today</small></span></div>
         <div><MousePointerClick /><span><b>{totalClicks}</b><small>Clicks</small></span></div>
         <div><Share2 /><span><b>{totalShares}</b><small>Shares</small></span></div>
       </div>

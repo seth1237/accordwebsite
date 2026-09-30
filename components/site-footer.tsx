@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { siteJobCount } from '@/lib/site-data'
+import { HOME_TOPIC_LINKS } from '@/lib/seo'
 import { ROUTES } from '@/lib/routes'
 import { COMPANY } from '@/lib/utils'
 
@@ -24,20 +25,20 @@ export async function SiteFooter() {
             <strong>Explore</strong>
             <Link href={ROUTES.products}>Products</Link>
             <Link href={ROUTES.about}>About</Link>
-            <Link href={ROUTES.news}>News</Link>
             <Link href={ROUTES.jobs} className="nav-label">
               Careers
               {jobCount > 0 ? <span className="nav-count">{jobCount}</span> : null}
             </Link>
             <Link href={ROUTES.contact}>Contact</Link>
+            <Link href={ROUTES.projects}>Projects</Link>
+            <Link href={ROUTES.news}>News</Link>
+            <Link href={ROUTES.quote}>Request Quote</Link>
           </div>
           <div className="footer-col">
-            <strong>More</strong>
-            <Link href={ROUTES.projects}>Projects</Link>
-            <Link href={ROUTES.offers}>Offers</Link>
-            <Link href={ROUTES.events}>Events</Link>
-            <Link href={ROUTES.manufacturers}>Manufacturers</Link>
-            <Link href={ROUTES.quote}>Request Quote</Link>
+            <strong>Equipment</strong>
+            {HOME_TOPIC_LINKS.map((link) => (
+              <Link key={link.href} href={link.href}>{link.label}</Link>
+            ))}
           </div>
         </div>
       </div>

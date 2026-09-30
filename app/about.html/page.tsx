@@ -1,8 +1,10 @@
 import Link from 'next/link'
+import type { Metadata } from 'next'
 import { SiteFooter } from '@/components/site-footer'
 import { SiteHeader } from '@/components/site-header'
 import { CompanyProfileBook } from '@/components/company-profile-book'
 import { ROUTES } from '@/lib/routes'
+import { pageMetadata } from '@/lib/seo'
 import { COMPANY } from '@/lib/utils'
 import { listCompanyProfilePages } from '@/lib/site-data'
 import { defaultCompanyProfilePages } from '@/lib/profile'
@@ -16,6 +18,14 @@ const services = [
 
 export const dynamic = 'force-dynamic'
 
+export const metadata: Metadata = pageMetadata({
+  title: 'About Accord Medical Supplies | Equipment Supplier, Eldoret & Nairobi',
+  description:
+    'Accord Medical Supplies Ltd is a Kenyan medical equipment supplier with an Eldoret office and Nairobi warehouse. We supply hospitals and clinics — we are not Accord Healthcare pharmaceuticals.',
+  path: ROUTES.about,
+  absoluteTitle: true,
+})
+
 export default async function AboutPage() {
   const stored = await listCompanyProfilePages(true).catch(() => [])
   const profile = stored.length ? stored : defaultCompanyProfilePages()
@@ -26,7 +36,12 @@ export default async function AboutPage() {
       <section className="shell section about-page">
         <span className="kicker">Who we are</span>
         <h1 className="page-title">About <em>{COMPANY.shortName}.</em></h1>
+        <p className="hero-lede">
+          {COMPANY.name} supplies medical equipment and laboratory products to hospitals and clinics in Kenya.
+          The sales office is in Eldoret; the warehouse is on Baba Dogo Road in Nairobi.
+        </p>
         <CompanyProfileBook pages={profile} />
+        <h2 className="section-subhead">What we do</h2>
         <div className="post-grid about-services">
           {services.map((service) => (
             <article className="post-card" key={service.title}>
@@ -35,9 +50,15 @@ export default async function AboutPage() {
             </article>
           ))}
         </div>
+        <h2 className="section-subhead">Where to find us</h2>
+        <p className="hero-lede">
+          Eldoret office: {COMPANY.location}. Nairobi warehouse: {COMPANY.warehouse}. For installation and
+          after-sales work see biomedical engineering services.
+        </p>
         <div className="about-actions">
           <Link href={ROUTES.products} className="button button-primary">Browse products</Link>
           <Link href={ROUTES.contact} className="button button-outline">Talk to us</Link>
+          <Link href={ROUTES.biomedical} className="button button-outline">Biomedical services</Link>
         </div>
       </section>
       <SiteFooter />

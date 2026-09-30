@@ -1048,7 +1048,7 @@ h1, h2, h3, p { margin: 0; }
 .related-track .product-image { height: 180px; }
 .share-wrap { position: relative; display: inline-flex; }
 .share-button { height: 36px; }
-.share-menu { position: absolute; top: calc(100% + 6px); left: 0; background: var(--glass); border: 1px solid var(--glass-border); border-radius: 12px; padding: 6px; display: grid; gap: 2px; z-index: 6; min-width: 148px; backdrop-filter: blur(12px); box-shadow: 8px 10px 22px var(--neo-dark), -4px -4px 12px var(--neo-light); }
+.share-menu { position: absolute; top: auto; bottom: calc(100% + 6px); left: 0; background: var(--glass); border: 1px solid var(--glass-border); border-radius: 12px; padding: 6px; display: grid; gap: 2px; z-index: 6; min-width: 148px; backdrop-filter: blur(12px); box-shadow: 8px 10px 22px var(--neo-dark), -4px -4px 12px var(--neo-light); }
 .share-menu button { display: flex; gap: 8px; align-items: center; background: transparent; border: 0; padding: 8px 10px; font-size: 12px; cursor: pointer; color: var(--navy); text-align: left; border-radius: 8px; width: 100%; }
 .share-menu button:hover { background: rgba(255, 255, 255, .55); }
 .quote-form { display: grid; gap: 10px; margin-top: 18px; background: var(--glass); border: 1px solid var(--glass-border); border-radius: 16px; padding: 16px; backdrop-filter: blur(12px); box-shadow: 7px 7px 18px var(--neo-dark), -5px -5px 14px var(--neo-light); }
@@ -1072,7 +1072,7 @@ h1, h2, h3, p { margin: 0; }
 .post-card { background: var(--glass); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; backdrop-filter: blur(10px); box-shadow: 6px 6px 16px var(--neo-dark), -4px -4px 12px var(--neo-light); }
 .post-meta { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
 .post-meta span:first-child { color: var(--primary); }
-.post-card h3 { color: var(--navy); font-size: 20px; line-height: 1.25; margin-bottom: 8px; }
+.post-card h2, .post-card h3 { color: var(--navy); font-size: 20px; line-height: 1.25; margin-bottom: 8px; }
 .post-card p { color: var(--muted-foreground); font-size: 14px; line-height: 1.5; }
 .blog-page .text-link { margin-top: 22px; }
 
@@ -1090,23 +1090,30 @@ h1, h2, h3, p { margin: 0; }
 .quote-empty { display: grid; gap: 14px; justify-items: start; color: var(--muted-foreground); }
 
 .job-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 28px; }
-.job-card { display: grid; grid-template-columns: 140px 1fr; gap: 0; background: var(--glass); border: 1px solid var(--glass-border); border-radius: 16px; overflow: hidden; box-shadow: 6px 6px 16px var(--neo-dark), -4px -4px 12px var(--neo-light); }
+.job-card { display: grid; grid-template-columns: 140px 1fr; gap: 0; background: var(--glass); border: 1px solid var(--glass-border); border-radius: 16px; overflow: visible; box-shadow: 6px 6px 16px var(--neo-dark), -4px -4px 12px var(--neo-light); }
 .job-card:hover { border-color: rgba(29, 143, 212, .45); }
-.job-card-image { background: #e8eef2; min-height: 140px; }
+.job-card-image { background: #e8eef2; min-height: 140px; overflow: hidden; border-radius: 16px 0 0 16px; }
 .job-card-image img, .job-card-image span { width: 100%; height: 100%; object-fit: cover; display: block; min-height: 140px; }
 .job-card-image span { background: linear-gradient(160deg, #d7eaf4, #e8f4f2); }
 .job-card-body { padding: 16px; }
 .job-meta { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--primary); }
-.job-card-body h3 { color: var(--navy); font-size: 18px; margin: 6px 0 8px; }
-.job-card-body h3 a { color: inherit; }
-.job-card-body h3 a:hover { color: var(--primary); }
+.job-card-body h2, .job-card-body h3 { color: var(--navy); font-size: 18px; margin: 6px 0 8px; }
+.job-card-body h2 a, .job-card-body h3 a { color: inherit; }
+.job-card-body h2 a:hover, .job-card-body h3 a:hover { color: var(--primary); }
 .job-card-body p { color: var(--muted-foreground); font-size: 14px; line-height: 1.5; }
 .job-details-btn {
-  margin-top: 14px;
+  margin-top: 0;
   width: fit-content;
   height: 40px;
   padding: 0 16px;
   font-size: 13px;
+}
+.job-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
 }
 .job-hero {
   margin: 22px 0 26px;
@@ -1273,6 +1280,7 @@ footer { background: #000; color: #dce9e8; padding-top: 36px; view-transition-na
   .footer-nav { gap: 16px; }
   .footer-col { font-size: 12px; gap: 8px; }
   .job-card { grid-template-columns: 1fr; }
+  .job-card-image { border-radius: 16px 16px 0 0; }
   .job-hero { width: min(280px, 100%); }
   .quote-item { grid-template-columns: 1fr auto; }
   .quote-item-qty, .quote-item-price { justify-self: start; }
@@ -1303,7 +1311,7 @@ footer { background: #000; color: #dce9e8; padding-top: 36px; view-transition-na
   .empty-state { padding: 18px 8px; }
   .post-grid { gap: 12px; margin-top: 16px; }
   .post-card { padding: 14px; }
-  .post-card h3 { font-size: 17px; }
+  .post-card h2, .post-card h3 { font-size: 17px; }
   .blog-page .text-link { margin-top: 16px; }
   .offer-banner-row { flex-direction: column; align-items: flex-start; }
   .about-actions { margin-top: 18px; }
@@ -1367,6 +1375,16 @@ footer { background: #000; color: #dce9e8; padding-top: 36px; view-transition-na
 .about-page .page-title { margin-bottom: 8px; }
 .about-services { margin-top: 36px; }
 .about-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+.home-intro { padding: 28px 0 8px; max-width: 740px; }
+.home-topic-links { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 18px; }
+.home-topic-links a { color: var(--navy); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
+.home-topic-links a:hover { color: var(--primary); }
+.section-subhead { color: var(--navy); font-size: 22px; margin: 36px 0 14px; letter-spacing: -.03em; }
+.contact-label { display: block; color: var(--navy); font-size: 13px; margin: 0 0 4px; font-weight: 700; }
+.post-related { margin-top: 28px; }
+.post-related h2 { color: var(--navy); font-size: 18px; margin-bottom: 10px; }
+.post-related ul { margin: 0; padding-left: 18px; }
+.post-related li { margin: 6px 0; }
 
 .profile-stage { margin: 18px 0 12px; }
 .profile-heading { margin-bottom: 16px; }

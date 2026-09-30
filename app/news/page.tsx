@@ -1,9 +1,18 @@
 import Link from 'next/link'
+import type { Metadata } from 'next'
 import { SiteFooter } from '@/components/site-footer'
 import { SiteHeader } from '@/components/site-header'
 import { newsPostHref, newsPosts } from '@/lib/news'
+import { pageMetadata } from '@/lib/seo'
 import { ROUTES } from '@/lib/routes'
 import { COMPANY } from '@/lib/utils'
+
+export const metadata: Metadata = pageMetadata({
+  title: 'News & Clinical Notes',
+  description:
+    'Notes from Accord Medical Supplies on laboratory analysers, maternity equipment, theatre setup and hospital projects in Kenya.',
+  path: ROUTES.news,
+})
 
 export default function NewsPage() {
   return (
@@ -20,7 +29,7 @@ export default function NewsPage() {
                 <span>{post.tag}</span>
                 <span>{post.date}</span>
               </div>
-              <h3>{post.title}</h3>
+              <h2>{post.title}</h2>
               <p>{post.summary}</p>
               <Link href={newsPostHref(post)} className="text-link">Read more</Link>
             </article>

@@ -193,6 +193,14 @@ export async function getCategoryPerformance() {
   return payload?.data || []
 }
 
+export async function getVisitorStats() {
+  const payload = await backendJson<{ data: Awaited<ReturnType<typeof import('@/lib/mongodb').getVisitorStats>> }>('/api/admin/visitors')
+  return payload?.data || {
+    today: { date: '', visitors: 0, pageviews: 0 },
+    days: [],
+  }
+}
+
 export async function siteJobCount() {
   return (await getSiteBootstrap()).jobCount
 }

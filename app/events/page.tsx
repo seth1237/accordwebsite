@@ -1,8 +1,17 @@
+import type { Metadata } from 'next'
 import { SiteFooter } from '@/components/site-footer'
 import { SiteHeader } from '@/components/site-header'
+import { pageMetadata } from '@/lib/seo'
+import { ROUTES } from '@/lib/routes'
 import { listEvents } from '@/lib/site-data'
 
 export const dynamic = 'force-dynamic'
+
+export const metadata: Metadata = pageMetadata({
+  title: 'Events & Equipment Demonstrations',
+  description: 'Trainings, product demonstrations and facility visits from Accord Medical Supplies in Kenya.',
+  path: ROUTES.events,
+})
 
 function formatWhen(value: string) {
   const date = new Date(value)
@@ -29,7 +38,7 @@ export default async function EventsPage() {
             {upcoming.map((item) => (
               <article key={item._id} className="job-card">
                 <div className="job-card-image">
-                  {item.cover ? <img src={item.cover.secureUrl} alt="" /> : <span />}
+                  {item.cover ? <img src={item.cover.secureUrl} alt={item.title} /> : <span />}
                 </div>
                 <div className="job-card-body">
                   <span className="job-meta">{formatWhen(item.startAt)} · {item.location}</span>

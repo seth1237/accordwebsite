@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { PLACEHOLDER_IMAGE, productImageSrc, type CatalogProduct } from '@/lib/catalog'
+import { productImageAlt } from '@/lib/seo'
 
 export function ProductGallery({ product }: { product: CatalogProduct }) {
   const images = product.images.length ? product.images : [productImageSrc(product)]
@@ -26,9 +27,9 @@ export function ProductGallery({ product }: { product: CatalogProduct }) {
               type="button"
               className={index === active ? 'thumb active' : 'thumb'}
               onClick={() => setActive(index)}
-              aria-label={`Photo ${index + 1}`}
+              aria-label={productImageAlt(product, index)}
             >
-              <img src={src} alt="" onError={fallback} />
+              <img src={src} alt={productImageAlt(product, index)} onError={fallback} />
               {product.imageAssets.find((asset) => asset.secureUrl === src)?.installation ? (
                 <span className="thumb-badge">Recent installation</span>
               ) : null}
@@ -37,7 +38,7 @@ export function ProductGallery({ product }: { product: CatalogProduct }) {
         </div>
       )}
       <div className="product-image detail">
-        <img src={current} alt={product.name} onError={fallback} />
+        <img src={current} alt={productImageAlt(product, active)} onError={fallback} />
         {isInstallation ? <span className="gallery-badge">Recent installation</span> : null}
       </div>
     </div>

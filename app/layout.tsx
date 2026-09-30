@@ -1,14 +1,23 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
-import { COMPANY } from '@/lib/utils'
+import { JsonLd } from '@/components/json-ld'
 import { AppProviders } from '@/components/app-providers'
+import { DEFAULT_DESCRIPTION, DEFAULT_TITLE, organizationJsonLd } from '@/lib/seo'
+import { COMPANY } from '@/lib/utils'
 
 export const metadata: Metadata = {
   metadataBase: new URL(COMPANY.url),
-  title: `${COMPANY.name} | ${COMPANY.tagline}`,
-  description: 'Medical equipment, laboratory supplies, and clinical consumables for hospitals and clinics across Kenya.',
+  title: {
+    default: DEFAULT_TITLE,
+    template: `%s | ${COMPANY.name}`,
+  },
+  description: DEFAULT_DESCRIPTION,
   applicationName: COMPANY.name,
+  authors: [{ name: COMPANY.name, url: COMPANY.url }],
+  creator: COMPANY.name,
+  publisher: COMPANY.name,
+  category: 'medical equipment',
   icons: {
     icon: COMPANY.logo,
     shortcut: COMPANY.logo,
@@ -19,42 +28,30 @@ export const metadata: Metadata = {
     locale: 'en_KE',
     url: COMPANY.url,
     siteName: COMPANY.name,
-    title: `${COMPANY.name} | ${COMPANY.tagline}`,
-    description: 'Medical equipment, laboratory supplies, and clinical consumables for hospitals and clinics across Kenya.',
+    title: DEFAULT_TITLE,
+    description: DEFAULT_DESCRIPTION,
     images: [{ url: COMPANY.logo, width: 1024, height: 341, alt: COMPANY.name }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: `${COMPANY.name} | ${COMPANY.tagline}`,
-    description: 'Medical equipment, laboratory supplies, and clinical consumables for hospitals and clinics across Kenya.',
+    title: DEFAULT_TITLE,
+    description: DEFAULT_DESCRIPTION,
     images: [COMPANY.logo],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true },
   },
 }
 
 export const viewport: Viewport = { colorScheme: 'light', themeColor: '#0b1220' }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const jsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'Organization',
-    name: COMPANY.name,
-    url: COMPANY.url,
-    logo: `${COMPANY.url}${COMPANY.logo}`,
-    email: COMPANY.email,
-    telephone: COMPANY.phone,
-    address: {
-      '@type': 'PostalAddress',
-      streetAddress: 'Commerce House, 3rd Floor, Room 308–309, Moi Avenue',
-      addressLocality: 'Nairobi',
-      postalCode: '00200',
-      addressCountry: 'KE',
-    },
-  }
-
   return (
-    <html lang="en" className="bg-background">
+    <html lang="en-KE" className="bg-background">
       <body className="antialiased">
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+        <JsonLd data={organizationJsonLd()} />
         <AppProviders>
           {children}
           {process.env.NODE_ENV === 'production' && <Analytics />}

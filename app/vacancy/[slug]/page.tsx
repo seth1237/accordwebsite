@@ -3,20 +3,24 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { SiteFooter } from '@/components/site-footer'
 import { SiteHeader } from '@/components/site-header'
-import { getJobBySlug } from '@/lib/site-data'
+import { jobHref } from '@/lib/jobs'
+import { pageMetadata } from '@/lib/seo'
 import { ROUTES } from '@/lib/routes'
+import { getJobBySlug } from '@/lib/site-data'
 import { COMPANY } from '@/lib/utils'
+import { JobShare } from '@/components/job-share'
 
 export const dynamic = 'force-dynamic'
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params
   const job = await getJobBySlug(slug).catch(() => null)
-  if (!job || !job.published) return { title: COMPANY.name }
-  return {
-    title: `${job.title} | ${COMPANY.shortName} careers`,
+  if (!job || !job.published) return { title: COMPANY.name, robots: { index: false, follow: true } }
+  return pageMetadata({
+    title: job.title,
     description: job.summary || job.description.slice(0, 160),
-  }
+    path: jobHref(job),
+  })
 }
 
 export default async function VacancyPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -49,7 +53,10 @@ export default async function VacancyPage({ params }: { params: Promise<{ slug: 
             <p>{job.requirements}</p>
           </div>
         )}
-        <a href={apply} className="button button-primary">Apply</a>
+        <div className="job-card-actions">
+          <a href={apply} className="button button-primary">Apply</a>
+          <JobShare job={job} />
+        </div>
       </section>
       <SiteFooter />
     </main>

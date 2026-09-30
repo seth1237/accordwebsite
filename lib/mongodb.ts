@@ -18,6 +18,8 @@ import {
   mysqlListDocs,
   mysqlRecordProductClick,
   mysqlRecordProductShare,
+  mysqlRecordSiteVisit,
+  mysqlGetVisitorStats,
   mysqlRemoveProductImage,
   mysqlSetProductImageInstallation,
   mysqlUniqueSlug,
@@ -525,6 +527,20 @@ export async function getCategoryPerformance(): Promise<CategoryPerformance[]> {
       { $sort: { clicks: -1 } },
     ]).toArray()
   })
+}
+
+export async function recordSiteVisit(input: { visitorId: string; path: string }) {
+  if (isMysqlConfigured()) {
+    await mysqlRecordSiteVisit(input)
+  }
+}
+
+export async function getVisitorStats(days = 90) {
+  if (isMysqlConfigured()) return mysqlGetVisitorStats(days)
+  return {
+    today: { date: new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' }), visitors: 0, pageviews: 0 },
+    days: [],
+  }
 }
 
 type JobDoc = Omit<JobPost, '_id' | 'createdAt' | 'updatedAt'> & {

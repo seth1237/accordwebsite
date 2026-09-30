@@ -7,8 +7,10 @@ import { QuoteForm } from '@/components/quote-form'
 import { ProductGallery } from '@/components/product-gallery'
 import { TrackProductClick } from '@/components/track-product-click'
 import { RelatedProducts } from '@/components/related-products'
-import { displayPrice, productHref } from '@/lib/catalog'
+import { JsonLd } from '@/components/json-ld'
+import { categoryHref, displayPrice, productHref } from '@/lib/catalog'
 import { catalogueDownloadHref } from '@/lib/content'
+import { breadcrumbJsonLd, pageMetadata, productJsonLd, productMetaDescription } from '@/lib/seo'
 import { getCatalogProduct, getPriceVisibility, getRelatedProducts, listCatalogues } from '@/lib/site-data'
 import { COMPANY } from '@/lib/utils'
 
@@ -17,19 +19,15 @@ export const dynamic = 'force-dynamic'
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params
   const product = await getCatalogProduct(slug)
-  if (!product) return { title: COMPANY.name }
+  if (!product) return { title: COMPANY.name, robots: { index: false, follow: true } }
   const image = product.image || COMPANY.logo
-  return {
-    title: `${product.name} | ${COMPANY.shortName}`,
-    description: product.description || `${product.name} from ${COMPANY.name}`,
-    alternates: { canonical: `${COMPANY.url}${productHref(product)}` },
-    openGraph: {
-      title: product.name,
-      description: product.description || `${product.name} from ${COMPANY.name}`,
-      url: `${COMPANY.url}${productHref(product)}`,
-      images: [{ url: image.startsWith('http') ? image : COMPANY.logo, alt: product.name }],
-    },
-  }
+  const description = productMetaDescription(product)
+  return pageMetadata({
+    title: product.name,
+    description,
+    path: productHref(product),
+    image,
+  })
 }
 
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -46,9 +44,19 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   ])
   const catalogueHref = catalogueDownloadHref(product, catalogues)
   const priceLabel = displayPrice(product, showPrices)
+  const categoryPath = categoryHref({ slug: product.categoryId, name: product.categoryName })
 
   return (
     <main className="min-h-screen">
+      <JsonLd data={productJsonLd(product, showPrices)} />
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: 'Home', path: '/' },
+          { name: 'Products', path: '/products' },
+          { name: product.categoryName, path: categoryPath },
+          { name: product.name, path: productHref(product) },
+        ])}
+      />
       <TrackProductClick
         productId={product.id}
         productName={product.name}
@@ -60,6 +68,8 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         <div className="shell">
           <nav className="product-breadcrumb" aria-label="Breadcrumb">
             <Link href="/products">Products</Link>
+            <span>/</span>
+            <Link href={categoryPath}>{product.categoryName}</Link>
             <span>/</span>
             <span>{product.name}</span>
           </nav>
@@ -89,6 +99,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                       <span className="active">Details</span>
                     </div>
                     <div className="product-specs">
+                      <h2 className="sr-only">Product details</h2>
                       <div dangerouslySetInnerHTML={{ __html: product.details }} />
                     </div>
                   </div>
@@ -98,16 +109,33 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                       <span className="active">Details</span>
                     </div>
                     <div className="product-specs">
+                      <h2 className="sr-only">Product details</h2>
                       <p>{product.description}</p>
                     </div>
                   </div>
-                ) : null}
+                ) : (
+                  <div className="product-tabs" id="details">
+                    <h2 className="sr-only">About this equipment</h2>
+                    <p>
+                      {product.name}
+                      {product.categoryName ? ` is listed under ${product.categoryName}` : ''} at {COMPANY.name}.
+                      Request a quote for pricing, installation and availability in Kenya.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         </div>
       </section>
-      {related.length > 0 && <RelatedProducts products={related} showPrices={showPrices} catalogues={catalogues} />}
+      {related.length > 0 && (
+        <RelatedProducts
+          products={related}
+          showPrices={showPrices}
+          catalogues={catalogues}
+          title={`More ${product.categoryName || 'equipment'}`}
+        />
+      )}
       <SiteFooter />
     </main>
   )

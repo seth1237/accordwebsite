@@ -1,7 +1,16 @@
 import Link from 'next/link'
+import type { Metadata } from 'next'
 import { SiteFooter } from '@/components/site-footer'
 import { SiteHeader } from '@/components/site-header'
+import { pageMetadata } from '@/lib/seo'
 import { COMPANY } from '@/lib/utils'
+
+export const metadata: Metadata = pageMetadata({
+  title: 'Manufacturers & Suppliers',
+  description:
+    'Manufacturers who want medical equipment listed with Accord Medical Supplies in Kenya can apply to become a supplier.',
+  path: '/manufacturers',
+})
 
 export default function ManufacturersPage() {
   return (

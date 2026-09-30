@@ -56,9 +56,11 @@ import {
   getJobById,
   getJobBySlug,
   getSiteSettings,
+  getVisitorStats,
   listJobs,
   recordProductClick,
   recordProductShare,
+  recordSiteVisit,
   removeProductImage,
   setProductImageInstallation,
   updateJob,
@@ -349,6 +351,20 @@ app.post('/api/products/share', async (c) => {
     return c.json({ success: true })
   } catch (error) {
     return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not record share' }, 500)
+  }
+})
+
+app.post('/api/analytics/visit', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}))
+    await recordSiteVisit({
+      visitorId: textValue(body.visitorId, 64),
+      path: textValue(body.path, 255),
+    })
+    return c.json({ success: true })
+  } catch (error) {
+    if (isMysqlConnectError(error)) return c.json({ success: true })
+    return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not record visit' }, 500)
   }
 })
 
@@ -761,6 +777,17 @@ app.get('/api/admin/performance', async (c) => {
     return c.json({ success: true, data: await getCategoryPerformance() })
   } catch (error) {
     if (isMysqlConnectError(error)) return c.json({ success: true, data: [] })
+    throw error
+  }
+})
+
+app.get('/api/admin/visitors', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  try {
+    return c.json({ success: true, data: await getVisitorStats(90) })
+  } catch (error) {
+    if (isMysqlConnectError(error)) return c.json({ success: true, data: { today: { date: '', visitors: 0, pageviews: 0 }, days: [] } })
     throw error
   }
 })
