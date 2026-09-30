@@ -1,6 +1,5 @@
 import { cache } from 'react'
 import { lastCatalog, readDevCatalogCache, writeDevCatalogCache } from '@/lib/catalog-cache'
-import { fetchAccordProducts } from '@/lib/accord-shop'
 import {
   assignSlugs,
   categoriesFromProducts,
@@ -9,33 +8,18 @@ import {
   type CatalogProduct,
 } from '@/lib/catalog'
 import { getProductMetricsMap, getProductContentMap, getSiteSettings, type ProductContent } from '@/lib/mongodb'
-import { isMysqlConfigured, isMysqlConnectError, mysqlListCatalogProducts, mysqlSetLocalCatalogReady } from '@/lib/mysql'
-
-function catalogSource() {
-  const value = String(process.env.CATALOG_SOURCE || 'auto').trim().toLowerCase()
-  if (value === 'mysql' || value === 'local') return 'mysql'
-  if (value === 'remote') return 'remote'
-  return 'auto'
-}
+import { isMysqlConfigured, mysqlListCatalogProducts, mysqlSetLocalCatalogReady } from '@/lib/mysql'
 
 async function loadRawProducts(): Promise<CatalogProduct[]> {
-  const source = catalogSource()
-  if (source === 'remote') return fetchAccordProducts().catch(() => [] as CatalogProduct[])
-  if (isMysqlConfigured()) {
-    try {
-      const local = await mysqlListCatalogProducts()
-      if (local.length) {
-        void mysqlSetLocalCatalogReady(true)
-        return local
-      }
-      if (source === 'mysql') return local
-    } catch (error) {
-      const cached = lastCatalog() || (await readDevCatalogCache())
-      if (cached?.products.length) return cached.products
-      if (source === 'mysql' || isMysqlConnectError(error)) return []
-    }
+  if (!isMysqlConfigured()) return []
+  try {
+    const local = await mysqlListCatalogProducts()
+    if (local.length) void mysqlSetLocalCatalogReady(true)
+    return local
+  } catch {
+    const cached = lastCatalog() || (await readDevCatalogCache())
+    return cached?.products.length ? cached.products : []
   }
-  return fetchAccordProducts().catch(() => [] as CatalogProduct[])
 }
 
 const CATALOG_TTL_MS = process.env.NODE_ENV === 'production' ? 60_000 : 15_000

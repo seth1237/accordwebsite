@@ -144,7 +144,7 @@ export async function catalogImportStatus() {
   const stats = await mysqlCatalogImportStats()
   return {
     source: process.env.CATALOG_SOURCE_URL || ACCORD_CATALOG_URL,
-    usingLocalCatalog: stats.products > 0 && process.env.CATALOG_SOURCE !== 'remote',
+    usingLocalCatalog: true,
     stats,
   }
 }

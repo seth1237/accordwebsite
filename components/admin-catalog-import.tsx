@@ -71,19 +71,19 @@ export function AdminCatalogImport() {
     <div className="admin-card catalog-import-card">
       <div className="card-title">
         <div>
-          <h3>Copy old shop into this database</h3>
+          <h3>Catalog database</h3>
           <span>
-            Pulls products, descriptions, and photos from the live Accord shop once, then this website serves them from MySQL.
+            The site reads products and photos from MySQL only. Use this only if you need to copy extra rows from the old shop into that database.
           </span>
         </div>
         <button type="button" className="button button-primary button-compact" disabled={busy} onClick={copyCatalog}>
-          {busy ? 'Copying…' : stats?.products ? 'Copy missing items' : 'Copy from old shop'}
+          {busy ? 'Copying…' : 'Copy missing items'}
         </button>
       </div>
       {message && <p className="admin-message">{message}</p>}
       <p className="catalog-import-meta">
-        Local catalog: <b>{stats?.products || 0}</b> products · <b>{stats?.importedImages || 0}</b> copied photos
-        {status?.usingLocalCatalog ? ' · site is reading from the new database' : ' · site still falls back to the old shop API until products are saved'}
+        MySQL catalog: <b>{stats?.products || 0}</b> products · <b>{stats?.importedImages || 0}</b> photos
+        {status?.usingLocalCatalog ? ' · live site is using this database' : ''}
       </p>
     </div>
   )
