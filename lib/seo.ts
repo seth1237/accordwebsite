@@ -22,15 +22,19 @@ export function pageMetadata({
   description,
   path,
   image,
+  imageType,
   index = true,
   absoluteTitle = false,
+  type = 'website',
 }: {
   title: string
   description: string
   path: string
   image?: string
+  imageType?: string
   index?: boolean
   absoluteTitle?: boolean
+  type?: 'website' | 'article'
 }): Metadata {
   const url = absoluteUrl(path)
   const desc = truncateMeta(description)
@@ -39,6 +43,9 @@ export function pageMetadata({
       ? image
       : absoluteUrl(image)
     : absoluteUrl(COMPANY.logo)
+  const ogImages = image
+    ? [{ url: ogImage, alt: title, width: 1200, height: 630, type: imageType || 'image/jpeg' }]
+    : [{ url: ogImage, alt: title, width: 1024, height: 341 }]
   return {
     title: absoluteTitle ? { absolute: title } : title,
     description: desc,
@@ -50,8 +57,8 @@ export function pageMetadata({
       url,
       siteName: COMPANY.name,
       locale: 'en_KE',
-      type: 'website',
-      images: [{ url: ogImage, alt: title }],
+      type,
+      images: ogImages,
     },
     twitter: {
       card: 'summary_large_image',
@@ -247,13 +254,19 @@ export function productJsonLd(product: CatalogProduct, showPrices: boolean) {
   }
 }
 
-export function articleJsonLd(input: { title: string; description: string; path: string; date: string }) {
+export function articleJsonLd(input: { title: string; description: string; path: string; date: string; image?: string }) {
+  const image = input.image
+    ? input.image.startsWith('http')
+      ? input.image
+      : absoluteUrl(input.image)
+    : undefined
   return {
     '@context': 'https://schema.org',
     '@type': 'Article',
     headline: input.title,
     description: input.description,
     datePublished: input.date,
+    image: image ? [image] : undefined,
     author: { '@type': 'Organization', name: COMPANY.name, url: COMPANY.url },
     publisher: { '@id': `${COMPANY.url}/#organization` },
     mainEntityOfPage: absoluteUrl(input.path),

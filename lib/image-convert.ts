@@ -37,3 +37,12 @@ export async function prepareStoredImage(buffer: Buffer, filename: string, mime:
   const base = filename.replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '-') || 'image'
   return { buffer: webp, filename: `${base}.webp`, mime: 'image/webp' as const }
 }
+
+export async function imageToOgJpeg(buffer: Buffer) {
+  const sharp = loadSharp()
+  return sharp(buffer, { failOn: 'none', animated: false })
+    .rotate()
+    .resize(1200, 630, { fit: 'cover', position: 'centre' })
+    .jpeg({ quality: 86, chromaSubsampling: '4:4:4' })
+    .toBuffer()
+}

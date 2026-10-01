@@ -5,7 +5,9 @@ import { SiteFooter } from '@/components/site-footer'
 import { SiteHeader } from '@/components/site-header'
 import { JsonLd } from '@/components/json-ld'
 import { EventBodyView, EventMeta } from '@/components/event-body-view'
+import { EventShare } from '@/components/event-share'
 import { eventHref } from '@/lib/content'
+import { eventPoster } from '@/lib/event-body'
 import { articleJsonLd, breadcrumbJsonLd, pageMetadata } from '@/lib/seo'
 import { ROUTES } from '@/lib/routes'
 import { getEventBySlug } from '@/lib/site-data'
@@ -21,7 +23,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     title: item.title,
     description: item.description || `Event from ${COMPANY.shortName}`,
     path: eventHref(item),
-    image: item.cover?.secureUrl,
+    image: `/events/${item.slug}/opengraph-image`,
+    imageType: 'image/jpeg',
+    type: 'article',
   })
 }
 
@@ -34,7 +38,13 @@ export default async function EventPostPage({ params }: { params: Promise<{ slug
 
   return (
     <main className="min-h-screen">
-      <JsonLd data={articleJsonLd({ title: item.title, description: item.description, path, date: item.startAt })} />
+      <JsonLd data={articleJsonLd({
+        title: item.title,
+        description: item.description,
+        path,
+        date: item.startAt,
+        image: `/events/${item.slug}/opengraph-image`,
+      })} />
       <JsonLd
         data={breadcrumbJsonLd([
           { name: 'Home', path: '/' },
@@ -47,7 +57,10 @@ export default async function EventPostPage({ params }: { params: Promise<{ slug
         <Link href={ROUTES.events} className="text-link">← All events</Link>
         <span className="kicker">Event</span>
         <h1 className="page-title">{item.title}</h1>
-        <EventMeta item={item} />
+        <div className="event-headline">
+          <EventMeta item={item} />
+          <EventShare item={item} />
+        </div>
         {item.cover ? (
           <figure className="event-cover">
             <img src={item.cover.secureUrl} alt={item.title} />
@@ -65,6 +78,7 @@ export default async function EventPostPage({ params }: { params: Promise<{ slug
             >
               Register
             </a>
+            <EventShare item={item} />
           </p>
         ) : null}
       </article>

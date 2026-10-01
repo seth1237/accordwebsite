@@ -125,6 +125,12 @@ export function parseEventBody(value: unknown, fallbackText = ''): EventBlock[] 
   return []
 }
 
+export function eventPoster(input: { cover?: MediaAsset | null; body?: EventBlock[] }): MediaAsset | null {
+  if (input.cover?.secureUrl) return input.cover
+  const block = (input.body || []).find((item) => item.type === 'image' && item.image.secureUrl)
+  return block && block.type === 'image' ? block.image : null
+}
+
 export function excerptFromBody(blocks: EventBlock[], fallback = '') {
   const paragraph = blocks.find((block) => block.type === 'paragraph' && block.html.replace(/<[^>]+>/g, '').trim())
   if (paragraph && paragraph.type === 'paragraph') {

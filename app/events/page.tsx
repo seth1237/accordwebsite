@@ -2,6 +2,7 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import { SiteFooter } from '@/components/site-footer'
 import { SiteHeader } from '@/components/site-header'
+import { EventShare } from '@/components/event-share'
 import { eventHref, type EventPost } from '@/lib/content'
 import { pageMetadata } from '@/lib/seo'
 import { ROUTES } from '@/lib/routes'
@@ -31,7 +32,10 @@ function EventCard({ item }: { item: EventPost }) {
         <span className="job-meta">{formatWhen(item.startAt)}{item.location ? ` · ${item.location}` : ''}</span>
         <h3><Link href={eventHref(item)}>{item.title}</Link></h3>
         {item.description ? <p>{item.description}</p> : null}
-        <Link className="text-link" href={eventHref(item)}>Read post</Link>
+        <div className="job-card-actions">
+          <Link className="button button-primary job-details-btn" href={eventHref(item)}>Read post</Link>
+          <EventShare item={item} />
+        </div>
       </div>
     </article>
   )
