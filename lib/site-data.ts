@@ -4,6 +4,7 @@ import { accordApiPath } from '@/lib/backend-url'
 import type { Catalog, CatalogProduct } from '@/lib/catalog'
 import type { Catalogue, CompanyProfilePage, EventPost, Installation, ManufacturerSubmission, Offer, RedirectRule } from '@/lib/content'
 import type { JobPost } from '@/lib/jobs'
+import { emptyVisitorReport, parsePeriod, type VisitorPeriod } from '@/lib/visitor-report'
 
 type Bootstrap = {
   catalog: Catalog
@@ -199,6 +200,16 @@ export async function getVisitorStats() {
     today: { date: '', visitors: 0, pageviews: 0 },
     days: [],
   }
+}
+
+export async function getVisitorReport(query?: { period?: VisitorPeriod; from?: string; to?: string }) {
+  const period = parsePeriod(query?.period)
+  const params = new URLSearchParams()
+  params.set('period', period)
+  if (query?.from) params.set('from', query.from)
+  if (query?.to) params.set('to', query.to)
+  const payload = await backendJson<{ data: Awaited<ReturnType<typeof import('@/lib/mongodb').getVisitorReport>> }>(`/api/admin/visitors?${params}`)
+  return payload?.data || emptyVisitorReport(period)
 }
 
 export async function siteJobCount() {

@@ -1,5 +1,6 @@
 import { MongoClient, ObjectId, type Collection, type Db } from 'mongodb'
 import type { JobImage, JobPost } from '@/lib/jobs'
+import { emptyVisitorReport, parsePeriod } from '@/lib/visitor-report'
 import {
   isMysqlConfigured,
   mysqlCountAdmins,
@@ -19,6 +20,7 @@ import {
   mysqlRecordProductClick,
   mysqlRecordProductShare,
   mysqlRecordSiteVisit,
+  mysqlGetVisitorReport,
   mysqlGetVisitorStats,
   mysqlRemoveProductImage,
   mysqlSetProductImageInstallation,
@@ -541,6 +543,11 @@ export async function getVisitorStats(days = 90) {
     today: { date: new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' }), visitors: 0, pageviews: 0 },
     days: [],
   }
+}
+
+export async function getVisitorReport(input: { period?: unknown; from?: unknown; to?: unknown } = {}) {
+  if (isMysqlConfigured()) return mysqlGetVisitorReport(input)
+  return emptyVisitorReport(parsePeriod(input.period))
 }
 
 type JobDoc = Omit<JobPost, '_id' | 'createdAt' | 'updatedAt'> & {

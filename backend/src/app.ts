@@ -56,6 +56,7 @@ import {
   getJobById,
   getJobBySlug,
   getSiteSettings,
+  getVisitorReport,
   getVisitorStats,
   listJobs,
   recordProductClick,
@@ -67,6 +68,7 @@ import {
   updateProductDetails,
   updateSiteSettings,
 } from '../../lib/mongodb'
+import { emptyVisitorReport, parsePeriod } from '../../lib/visitor-report'
 import {
   isMysqlConfigured,
   isMysqlConnectError,
@@ -784,10 +786,21 @@ app.get('/api/admin/performance', async (c) => {
 app.get('/api/admin/visitors', async (c) => {
   const auth = requireAdmin(c)
   if (auth.error) return c.json(auth.error, auth.status)
+  const period = c.req.query('period')
+  const from = c.req.query('from')
+  const to = c.req.query('to')
   try {
+    if (period || from || to) {
+      return c.json({ success: true, data: await getVisitorReport({ period, from, to }) })
+    }
     return c.json({ success: true, data: await getVisitorStats(90) })
   } catch (error) {
-    if (isMysqlConnectError(error)) return c.json({ success: true, data: { today: { date: '', visitors: 0, pageviews: 0 }, days: [] } })
+    if (isMysqlConnectError(error)) {
+      if (period || from || to) {
+        return c.json({ success: true, data: emptyVisitorReport(parsePeriod(period)) })
+      }
+      return c.json({ success: true, data: { today: { date: '', visitors: 0, pageviews: 0 }, days: [] } })
+    }
     throw error
   }
 })

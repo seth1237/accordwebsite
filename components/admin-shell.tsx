@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { BarChart3, BookOpen, Briefcase, Calendar, Eye, FileText, ImagePlus, LayoutDashboard, Link2, LogOut, Package, Settings, Store, Tag, Wrench } from 'lucide-react'
+import { BarChart3, BookOpen, Briefcase, Calendar, FileText, ImagePlus, LayoutDashboard, Link2, LogOut, Package, Settings, Store, Tag, Wrench } from 'lucide-react'
 
 const nav = [
   { href: '/admin', label: 'Overview', icon: LayoutDashboard },
@@ -15,7 +15,6 @@ const nav = [
   { href: '/admin/events', label: 'Events', icon: Calendar },
   { href: '/admin/manufacturers', label: 'Manufacturers', icon: Store },
   { href: '/admin/jobs', label: 'Jobs', icon: Briefcase },
-  { href: '/admin/visitors', label: 'Visitors', icon: Eye },
   { href: '/admin/performance', label: 'Performance', icon: BarChart3 },
   { href: '/admin/redirects', label: 'Redirects', icon: Link2 },
   { href: '/admin/settings', label: 'Settings', icon: Settings },

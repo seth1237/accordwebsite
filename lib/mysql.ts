@@ -2,6 +2,7 @@ import { setDefaultResultOrder } from 'node:dns'
 import mysql, { type Pool, type ResultSetHeader, type RowDataPacket } from 'mysql2/promise'
 import type { Catalogue, CatalogueDownload, CompanyProfilePage, MediaAsset } from '@/lib/content'
 import type { CatalogProduct } from '@/lib/catalog'
+import { clampRange, defaultRange, fillVisitorSeries, isIsoDate, monthStart, parsePeriod, weekStart } from '@/lib/visitor-report'
 
 setDefaultResultOrder('ipv4first')
 
@@ -1245,6 +1246,14 @@ export type VisitorDay = {
   pageviews: number
 }
 
+function mapVisitRows(rows: RowDataPacket[]): VisitorDay[] {
+  return rows.map((row) => ({
+    date: String(row.visit_date || row.bucket),
+    visitors: Number(row.visitors) || 0,
+    pageviews: Number(row.pageviews) || 0,
+  }))
+}
+
 export async function mysqlGetVisitorStats(days = 90): Promise<{ today: VisitorDay; days: VisitorDay[] }> {
   await ensureMysqlSchema()
   const pool = await getPool()
@@ -1259,13 +1268,68 @@ export async function mysqlGetVisitorStats(days = 90): Promise<{ today: VisitorD
      ORDER BY visit_date DESC`,
     [today, Math.max(1, Math.min(365, days))],
   )
-  const list: VisitorDay[] = rows.map((row) => ({
-    date: String(row.visit_date),
-    visitors: Number(row.visitors) || 0,
-    pageviews: Number(row.pageviews) || 0,
-  }))
+  const list = mapVisitRows(rows)
   return {
     today: list.find((row) => row.date === today) || { date: today, visitors: 0, pageviews: 0 },
     days: list,
+  }
+}
+
+export async function mysqlGetVisitorReport(input: { period?: unknown; from?: unknown; to?: unknown } = {}) {
+  const period = parsePeriod(input.period)
+  const today = nairobiDate()
+  const custom = isIsoDate(String(input.from || '')) || isIsoDate(String(input.to || ''))
+  const range = custom
+    ? clampRange(String(input.from || ''), String(input.to || ''), today)
+    : defaultRange(period, today)
+  const seriesFrom = period === 'weekly' ? weekStart(range.from) : period === 'monthly' ? monthStart(range.from) : range.from
+  const bucket = period === 'weekly'
+    ? `DATE_FORMAT(DATE_SUB(visit_date, INTERVAL WEEKDAY(visit_date) DAY), '%Y-%m-%d')`
+    : period === 'monthly'
+      ? `DATE_FORMAT(visit_date, '%Y-%m-01')`
+      : `DATE_FORMAT(visit_date, '%Y-%m-%d')`
+
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const [seriesRows, totalRows, todayRows] = await Promise.all([
+    pool.query<RowDataPacket[]>(
+      `SELECT ${bucket} AS bucket,
+              COUNT(DISTINCT visitor_id) AS visitors,
+              SUM(hits) AS pageviews
+       FROM accord_nx_site_visits
+       WHERE visit_date BETWEEN ? AND ?
+       GROUP BY ${bucket}
+       ORDER BY bucket ASC`,
+      [range.from, range.to],
+    ),
+    pool.query<RowDataPacket[]>(
+      `SELECT COUNT(DISTINCT visitor_id) AS visitors, COALESCE(SUM(hits), 0) AS pageviews
+       FROM accord_nx_site_visits
+       WHERE visit_date BETWEEN ? AND ?`,
+      [range.from, range.to],
+    ),
+    pool.query<RowDataPacket[]>(
+      `SELECT DATE_FORMAT(visit_date, '%Y-%m-%d') AS visit_date,
+              COUNT(DISTINCT visitor_id) AS visitors,
+              SUM(hits) AS pageviews
+       FROM accord_nx_site_visits
+       WHERE visit_date = ?
+       GROUP BY visit_date`,
+      [today],
+    ),
+  ])
+
+  const todayPoint = mapVisitRows(todayRows[0])[0] || { date: today, visitors: 0, pageviews: 0 }
+  const totalsRow = totalRows[0][0]
+  return {
+    period,
+    from: range.from,
+    to: range.to,
+    today: todayPoint,
+    totals: {
+      visitors: Number(totalsRow?.visitors) || 0,
+      pageviews: Number(totalsRow?.pageviews) || 0,
+    },
+    series: fillVisitorSeries(period, seriesFrom, range.to, mapVisitRows(seriesRows[0])),
   }
 }

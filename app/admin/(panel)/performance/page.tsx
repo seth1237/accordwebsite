@@ -1,10 +1,15 @@
-import { BarChart3, MousePointerClick, Share2 } from 'lucide-react'
-import { getCatalog, getCategoryPerformance } from '@/lib/site-data'
+import { BarChart3, MousePointerClick, Share2, Users } from 'lucide-react'
+import { AdminVisitorReport } from '@/components/admin-visitor-report'
+import { getCatalog, getCategoryPerformance, getVisitorReport } from '@/lib/site-data'
 import { formatKes, productImageSrc } from '@/lib/catalog'
+import { emptyVisitorReport } from '@/lib/visitor-report'
 
 export default async function AdminPerformancePage() {
   const catalog = await getCatalog()
-  const categoryPerformance = await getCategoryPerformance().catch(() => [])
+  const [categoryPerformance, visitors] = await Promise.all([
+    getCategoryPerformance().catch(() => []),
+    getVisitorReport({ period: 'daily' }).catch(() => emptyVisitorReport('daily')),
+  ])
   const totalClicks = catalog.products.reduce((sum, product) => sum + (product.clicks || 0), 0)
   const totalShares = catalog.products.reduce((sum, product) => sum + (product.shares || 0), 0)
   const byId = new Map(categoryPerformance.map((item) => [item.categoryId, item]))
@@ -22,23 +27,26 @@ export default async function AdminPerformancePage() {
   const ranked = catalog.products.filter((product) => product.clicks || product.shares).slice(0, 20)
 
   return (
-    <>
+    <div className="admin-performance">
       <header className="admin-header">
         <div>
           <span className="admin-eyebrow">Accord Medical Supplies</span>
           <h1>Performance</h1>
+          <p className="admin-header-note">Traffic and product activity from the live site.</p>
         </div>
       </header>
       <div className="admin-stats">
+        <div><Users /><span><b>{visitors.today.visitors}</b><small>Visitors today</small></span></div>
         <div><MousePointerClick /><span><b>{totalClicks}</b><small>Product clicks</small></span></div>
         <div><Share2 /><span><b>{totalShares}</b><small>Shares</small></span></div>
         <div><BarChart3 /><span><b>{categoryStats.length}</b><small>Categories</small></span></div>
       </div>
+      <AdminVisitorReport initial={visitors} />
       <div className="admin-card category-metrics">
         <div className="card-title">
           <div>
-            <h3>Performance by category</h3>
-            <span>Clicks and shares, ranked highest first.</span>
+            <h3>By category</h3>
+            <span>Clicks first, then shares.</span>
           </div>
         </div>
         <div className="category-perf-list">
@@ -60,7 +68,7 @@ export default async function AdminPerformancePage() {
         <div className="card-title">
           <div>
             <h3>Product activity</h3>
-            <span>Top products by clicks, with share counts.</span>
+            <span>Highest click counts first.</span>
           </div>
         </div>
         <div className="admin-product-list">
@@ -82,6 +90,6 @@ export default async function AdminPerformancePage() {
           {ranked.length === 0 && <p className="empty-state">No clicks or shares recorded yet.</p>}
         </div>
       </div>
-    </>
+    </div>
   )
 }
