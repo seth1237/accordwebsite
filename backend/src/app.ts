@@ -7,6 +7,8 @@ import { ADMIN_COOKIE, adminCookieOptions, authenticateAdmin, createAdminSession
 import { slugifyName } from '../../lib/catalog'
 import { getCatalog, getCatalogProduct, getPriceVisibility } from '../../lib/catalog-data'
 import { csvIds } from '../../lib/content'
+import { excerptFromBody, parseEventBody } from '../../lib/event-body'
+import { prepareStoredImage } from '../../lib/image-convert'
 import {
   catalogueAnalytics,
   createCatalogue,
@@ -25,6 +27,7 @@ import {
   getCatalogueById,
   getCompanyProfilePageById,
   getEventById,
+  getEventBySlug,
   getInstallationById,
   getInstallationBySlug,
   getManufacturerByToken,
@@ -77,10 +80,9 @@ import {
   mysqlDeleteFile,
   mysqlGetCatalogueFile,
   mysqlGetFile,
-  mysqlSaveFile,
 } from '../../lib/mysql'
 import { catalogImportStatus, importCatalogBatch } from '../../lib/catalog-import'
-import { deleteCloudinaryImage, isCloudinaryConfigured, uploadProductImage, uploadSiteImage } from '../../lib/cloudinary'
+import { deleteCloudinaryImage, isCloudinaryConfigured, uploadProductImage } from '../../lib/cloudinary'
 import { createERPQuote } from '../../lib/erp'
 import { COMPANY } from '../../lib/utils'
 import { formChecked, formText, uploadFormDocument, uploadFormImage } from './forms'
@@ -251,6 +253,11 @@ app.get('/api/jobs/:slug', async (c) => {
 })
 app.get('/api/offers', async (c) => c.json({ success: true, data: await listOffers(true).catch(() => []) }))
 app.get('/api/events', async (c) => c.json({ success: true, data: await listEvents(true).catch(() => []) }))
+app.get('/api/events/:slug', async (c) => {
+  const item = await getEventBySlug(c.req.param('slug'))
+  if (!item || !item.published) return c.json({ success: false, message: 'Event not found' }, 404)
+  return c.json({ success: true, data: item })
+})
 app.get('/api/installations', async (c) => c.json({ success: true, data: await listInstallations(true).catch(() => []) }))
 app.get('/api/installations/:slug', async (c) => {
   const item = await getInstallationBySlug(c.req.param('slug'))
@@ -517,18 +524,7 @@ app.post('/api/admin/jobs', async (c) => {
   let image: { publicId: string; secureUrl: string } | null = null
   const file = form.get('image')
   if (file instanceof File && file.size > 0) {
-    if (isMysqlConfigured()) {
-      image = await mysqlSaveFile({
-        kind: 'image',
-        ownerKey: `job/${slugifyName(title) || 'job'}`,
-        filename: file.name || 'job.jpg',
-        mime: file.type,
-        buffer: Buffer.from(await file.arrayBuffer()),
-      })
-    } else if (isCloudinaryConfigured()) {
-      const uploaded = await uploadSiteImage(Buffer.from(await file.arrayBuffer()), 'tarumed/jobs', slugifyName(title) || 'job')
-      image = { publicId: uploaded.public_id, secureUrl: uploaded.secure_url }
-    }
+    image = await uploadFormImage(file, 'tarumed/jobs', slugifyName(title) || 'job')
   }
   const job = await createJob({
     title,
@@ -557,16 +553,8 @@ app.patch('/api/admin/jobs/:id', async (c) => {
   let image = existing.image
   const file = form.get('image')
   if (file instanceof File && file.size > 0) {
-    if (isMysqlConfigured()) {
-      image = await mysqlSaveFile({
-        kind: 'image',
-        ownerKey: `job/${slugifyName(title) || 'job'}`,
-        filename: file.name || 'job.jpg',
-        mime: file.type,
-        buffer: Buffer.from(await file.arrayBuffer()),
-      })
-      if (existing.image?.publicId?.startsWith('mysql:')) await mysqlDeleteFile(existing.image.publicId).catch(() => undefined)
-    }
+    image = await uploadFormImage(file, 'tarumed/jobs', slugifyName(title) || 'job')
+    if (existing.image?.publicId?.startsWith('mysql:')) await mysqlDeleteFile(existing.image.publicId).catch(() => undefined)
   }
   if (formText(form, 'removeImage') === 'true') {
     if (existing.image?.publicId?.startsWith('mysql:')) await mysqlDeleteFile(existing.image.publicId).catch(() => undefined)
@@ -636,11 +624,12 @@ app.post('/api/admin/product-image', async (c) => {
   for (const file of files) {
     if (!file.type.startsWith('image/') || file.size > 8 * 1024 * 1024) continue
     const buffer = Buffer.from(await file.arrayBuffer())
+    const prepared = await prepareStoredImage(buffer, file.name || 'product.jpg', file.type)
     if (isMysqlConfigured()) {
-      uploaded.push(await mysqlAddProductImage(erpProductId, buffer, file.name || 'product.jpg', file.type, installation))
+      uploaded.push(await mysqlAddProductImage(erpProductId, prepared.buffer, prepared.filename, prepared.mime, installation))
       continue
     }
-    const result = await uploadProductImage(buffer, erpProductId)
+    const result = await uploadProductImage(prepared.buffer, erpProductId)
     uploaded.push(await addProductImage(erpProductId, { publicId: result.public_id, secureUrl: result.secure_url, installation }))
   }
   if (!uploaded.length) return c.json({ success: false, message: 'No valid images uploaded' }, 400)
@@ -863,6 +852,19 @@ app.delete('/api/admin/offers/:id', async (c) => {
   return c.json({ success: true })
 })
 
+app.post('/api/admin/media', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  try {
+    const form = await c.req.formData()
+    const uploaded = await uploadFormImage(form.get('file'), formText(form, 'folder') || 'tarumed/events', slugifyName(formText(form, 'name')) || 'image')
+    if (!uploaded) return c.json({ success: false, message: 'Upload a valid image under 8MB' }, 400)
+    return c.json({ success: true, data: uploaded })
+  } catch (error) {
+    return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not upload image' }, 400)
+  }
+})
+
 app.get('/api/admin/events', async (c) => {
   const auth = requireAdmin(c)
   if (auth.error) return c.json(auth.error, auth.status)
@@ -876,13 +878,16 @@ app.post('/api/admin/events', async (c) => {
   const title = formText(form, 'title')
   if (!title) return c.json({ success: false, message: 'Title is required' }, 400)
   const cover = await uploadFormImage(form.get('cover'), 'tarumed/events', slugifyName(title) || 'event')
+  const body = parseEventBody(formText(form, 'body'), formText(form, 'description'))
   const item = await createEvent({
     title,
-    description: formText(form, 'description'),
+    slug: formText(form, 'slug'),
+    description: formText(form, 'description') || excerptFromBody(body),
     startAt: formText(form, 'startAt') || new Date().toISOString(),
     location: formText(form, 'location'),
     cover,
     registrationUrl: formText(form, 'registrationUrl'),
+    body,
     published: formChecked(form, 'published'),
   })
   return c.json({ success: true, data: item })
@@ -894,19 +899,43 @@ app.patch('/api/admin/events/:id', async (c) => {
   const existing = await getEventById(c.req.param('id'))
   if (!existing) return c.json({ success: false, message: 'Event not found' }, 404)
   const form = await c.req.formData()
-  const title = formText(form, 'title') || existing.title
+  const title = form.has('title') ? formText(form, 'title') || existing.title : existing.title
   let cover = existing.cover
   const uploaded = await uploadFormImage(form.get('cover'), 'tarumed/events', slugifyName(title) || 'event')
   if (uploaded) cover = uploaded
   if (formText(form, 'removeImage') === 'true') cover = null
+  const body = form.has('body')
+    ? parseEventBody(form.get('body'), formText(form, 'description') || existing.description)
+    : existing.body
   const item = await updateEvent(c.req.param('id'), {
     title,
-    description: formText(form, 'description'),
-    startAt: formText(form, 'startAt') || existing.startAt,
-    location: formText(form, 'location'),
+    slug: form.has('slug') ? formText(form, 'slug') || existing.slug : existing.slug,
+    description: form.has('description') ? formText(form, 'description') || excerptFromBody(body) : existing.description,
+    startAt: form.has('startAt') ? formText(form, 'startAt') || existing.startAt : existing.startAt,
+    location: form.has('location') ? formText(form, 'location') : existing.location,
     cover,
-    registrationUrl: formText(form, 'registrationUrl'),
-    published: formChecked(form, 'published'),
+    registrationUrl: form.has('registrationUrl') ? formText(form, 'registrationUrl') : existing.registrationUrl,
+    body,
+    published: form.has('published') ? formChecked(form, 'published') : existing.published,
+  })
+  return c.json({ success: true, data: item })
+})
+
+app.post('/api/admin/events/:id/duplicate', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  const existing = await getEventById(c.req.param('id'))
+  if (!existing) return c.json({ success: false, message: 'Event not found' }, 404)
+  const item = await createEvent({
+    title: `${existing.title.replace(/\s+\(copy\)\s*$/i, '')} (copy)`,
+    slug: '',
+    description: existing.description,
+    startAt: existing.startAt,
+    location: existing.location,
+    cover: existing.cover,
+    registrationUrl: existing.registrationUrl,
+    body: existing.body,
+    published: false,
   })
   return c.json({ success: true, data: item })
 })

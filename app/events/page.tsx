@@ -1,6 +1,8 @@
+import Link from 'next/link'
 import type { Metadata } from 'next'
 import { SiteFooter } from '@/components/site-footer'
 import { SiteHeader } from '@/components/site-header'
+import { eventHref, type EventPost } from '@/lib/content'
 import { pageMetadata } from '@/lib/seo'
 import { ROUTES } from '@/lib/routes'
 import { listEvents } from '@/lib/site-data'
@@ -19,6 +21,22 @@ function formatWhen(value: string) {
   return date.toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' })
 }
 
+function EventCard({ item }: { item: EventPost }) {
+  return (
+    <article className="job-card">
+      <Link href={eventHref(item)} className="job-card-image">
+        {item.cover ? <img src={item.cover.secureUrl} alt={item.title} /> : <span />}
+      </Link>
+      <div className="job-card-body">
+        <span className="job-meta">{formatWhen(item.startAt)}{item.location ? ` · ${item.location}` : ''}</span>
+        <h3><Link href={eventHref(item)}>{item.title}</Link></h3>
+        {item.description ? <p>{item.description}</p> : null}
+        <Link className="text-link" href={eventHref(item)}>Read post</Link>
+      </div>
+    </article>
+  )
+}
+
 export default async function EventsPage() {
   const items = await listEvents(true).catch(() => [])
   const now = Date.now()
@@ -35,37 +53,14 @@ export default async function EventsPage() {
         {items.length === 0 && <p className="empty-state">No events listed right now.</p>}
         {upcoming.length > 0 && (
           <div className="job-grid">
-            {upcoming.map((item) => (
-              <article key={item._id} className="job-card">
-                <div className="job-card-image">
-                  {item.cover ? <img src={item.cover.secureUrl} alt={item.title} /> : <span />}
-                </div>
-                <div className="job-card-body">
-                  <span className="job-meta">{formatWhen(item.startAt)} · {item.location}</span>
-                  <h3>{item.title}</h3>
-                  <p>{item.description}</p>
-                  {item.registrationUrl && (
-                    <a className="text-link" href={item.registrationUrl} target="_blank" rel="noopener noreferrer">Register</a>
-                  )}
-                </div>
-              </article>
-            ))}
+            {upcoming.map((item) => <EventCard key={item._id} item={item} />)}
           </div>
         )}
         {past.length > 0 && (
           <div className="past-events">
             <h2>Past events</h2>
-            <div className="post-grid">
-              {past.map((item) => (
-                <article className="post-card" key={item._id}>
-                  <div className="post-meta">
-                    <span>{item.location}</span>
-                    <span>{formatWhen(item.startAt)}</span>
-                  </div>
-                  <h3>{item.title}</h3>
-                  <p>{item.description}</p>
-                </article>
-              ))}
+            <div className="job-grid">
+              {past.map((item) => <EventCard key={item._id} item={item} />)}
             </div>
           </div>
         )}

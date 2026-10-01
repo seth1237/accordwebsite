@@ -31,7 +31,7 @@ export async function SiteFooter() {
             </Link>
             <Link href={ROUTES.contact}>Contact</Link>
             <Link href={ROUTES.projects}>Projects</Link>
-            <Link href={ROUTES.news}>News</Link>
+            <Link href={ROUTES.events}>Events</Link>
             <Link href={ROUTES.quote}>Request Quote</Link>
           </div>
           <div className="footer-col">

@@ -16,7 +16,6 @@ const links = [
   { href: ROUTES.about, label: 'About', match: [ROUTES.about] },
   { href: ROUTES.projects, label: 'Projects', match: ['/projects', '/project/'] },
   { href: ROUTES.jobs, label: 'Careers', match: ['/jobs', '/vacancy/'] },
-  { href: ROUTES.news, label: 'News', match: ['/news', '/post/'] },
   { href: ROUTES.contact, label: 'Contact', match: [ROUTES.contact] },
   { href: ROUTES.offers, label: 'Offers', match: [ROUTES.offers] },
   { href: ROUTES.events, label: 'Events', match: [ROUTES.events] },

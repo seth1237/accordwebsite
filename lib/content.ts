@@ -1,3 +1,5 @@
+import type { EventBlock } from '@/lib/event-body'
+
 export type MediaAsset = {
   publicId: string
   secureUrl: string
@@ -37,11 +39,13 @@ export type Offer = {
 export type EventPost = {
   _id: string
   title: string
+  slug: string
   description: string
   startAt: string
   location: string
   cover: MediaAsset | null
   registrationUrl: string
+  body: EventBlock[]
   published: boolean
   createdAt: string
   updatedAt: string
@@ -103,6 +107,10 @@ export type CompanyProfilePage = {
   published: boolean
   createdAt: string
   updatedAt: string
+}
+
+export function eventHref(item: Pick<EventPost, 'slug'>) {
+  return `/events/${item.slug}`
 }
 
 export function installationHref(item: Pick<Installation, 'slug'>) {

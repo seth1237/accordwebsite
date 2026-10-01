@@ -1,9 +1,8 @@
 import type { MetadataRoute } from 'next'
 import { categoryHref, productHref } from '@/lib/catalog'
-import { getCatalog, listInstallations, listJobs } from '@/lib/site-data'
+import { getCatalog, listEvents, listInstallations, listJobs } from '@/lib/site-data'
 import { jobHref } from '@/lib/jobs'
-import { newsPostHref, newsPosts } from '@/lib/news'
-import { installationHref } from '@/lib/content'
+import { eventHref, installationHref } from '@/lib/content'
 import { ROUTES } from '@/lib/routes'
 import { COMPANY } from '@/lib/utils'
 
@@ -18,21 +17,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${base}${ROUTES.biomedical}`, lastModified: now, changeFrequency: 'monthly', priority: 0.7 },
     { url: `${base}${ROUTES.jobs}`, lastModified: now, changeFrequency: 'weekly', priority: 0.7 },
     { url: `${base}${ROUTES.projects}`, lastModified: now, changeFrequency: 'weekly', priority: 0.6 },
-    { url: `${base}${ROUTES.news}`, lastModified: now, changeFrequency: 'weekly', priority: 0.5 },
     { url: `${base}${ROUTES.offers}`, lastModified: now, changeFrequency: 'weekly', priority: 0.4 },
     { url: `${base}${ROUTES.events}`, lastModified: now, changeFrequency: 'weekly', priority: 0.4 },
     { url: `${base}${ROUTES.manufacturers}`, lastModified: now, changeFrequency: 'monthly', priority: 0.3 },
     { url: `${base}${ROUTES.quote}`, lastModified: now, changeFrequency: 'monthly', priority: 0.3 },
   ]
-
-  for (const post of newsPosts) {
-    pages.push({
-      url: `${base}${newsPostHref(post)}`,
-      lastModified: new Date(post.isoDate),
-      changeFrequency: 'monthly',
-      priority: 0.5,
-    })
-  }
 
   try {
     const catalog = await getCatalog()
@@ -53,9 +42,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         priority: 0.7,
       })
     }
-    const [jobs, installations] = await Promise.all([
+    const [jobs, installations, events] = await Promise.all([
       listJobs(true),
       listInstallations(true).catch(() => []),
+      listEvents(true).catch(() => []),
     ])
     for (const job of jobs) {
       pages.push({
@@ -68,6 +58,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     for (const item of installations) {
       pages.push({
         url: `${base}${installationHref(item)}`,
+        lastModified: new Date(item.updatedAt),
+        changeFrequency: 'weekly',
+        priority: 0.4,
+      })
+    }
+    for (const item of events) {
+      pages.push({
+        url: `${base}${eventHref(item)}`,
         lastModified: new Date(item.updatedAt),
         changeFrequency: 'weekly',
         priority: 0.4,

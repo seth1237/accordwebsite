@@ -9,6 +9,7 @@ import {
   mysqlUpdateProductDetails,
   mysqlUpsertCatalogProduct,
 } from '@/lib/mysql'
+import { prepareStoredImage } from '@/lib/image-convert'
 
 const IMAGE_MAX_BYTES = 8 * 1024 * 1024
 
@@ -102,12 +103,13 @@ export async function importCatalogBatch(limit = 6): Promise<CatalogImportBatchR
             imagesSkipped += 1
             continue
           }
+          const prepared = await prepareStoredImage(image.buffer, image.filename, image.mime)
           await mysqlSaveFile({
             kind: 'product-image',
             ownerKey: product.id,
-            filename: image.filename,
-            mime: image.mime,
-            buffer: image.buffer,
+            filename: prepared.filename,
+            mime: prepared.mime,
+            buffer: prepared.buffer,
             sourceUrl: image.sourceUrl,
           })
           imagesSaved += 1

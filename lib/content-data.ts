@@ -13,6 +13,9 @@ import type {
   RedirectRule,
 } from '@/lib/content'
 import { normalizePath } from '@/lib/content'
+import { isCloudinaryConfigured, uploadSiteImage } from '@/lib/cloudinary'
+import { excerptFromBody, parseEventBody } from '@/lib/event-body'
+import { prepareStoredImage } from '@/lib/image-convert'
 import { ensureIndexes, getCollection, isMongoConfigured } from '@/lib/mongodb'
 import {
   isMysqlConfigured,
@@ -34,7 +37,6 @@ import {
   mysqlUniqueSlug,
   mysqlUpdateDoc,
 } from '@/lib/mysql'
-import { isCloudinaryConfigured, uploadSiteImage } from '@/lib/cloudinary'
 import { renderPdfPages } from '@/lib/pdf-pages'
 
 type WithDates<T> = Omit<T, '_id' | 'createdAt' | 'updatedAt' | 'publishedAt' | 'startDate' | 'endDate' | 'startAt'> & {
@@ -141,15 +143,32 @@ function serializeOffer(doc: WithDates<Offer> & { _id: ObjectId }): Offer {
   }
 }
 
-function serializeEvent(doc: WithDates<EventPost> & { _id: ObjectId }): EventPost {
+function serializeEvent(doc: {
+  _id: unknown
+  title?: string
+  slug?: string
+  description?: string
+  startAt?: string | Date
+  location?: string
+  cover?: EventPost['cover']
+  registrationUrl?: string
+  body?: unknown
+  published?: boolean
+  createdAt?: string | Date
+  updatedAt?: string | Date
+}): EventPost {
+  const body = parseEventBody(doc.body, doc.description || '')
+  const title = doc.title || ''
   return {
     _id: String(doc._id),
-    title: doc.title,
-    description: doc.description || '',
+    title,
+    slug: doc.slug || slugifyName(title) || String(doc._id),
+    description: doc.description || excerptFromBody(body) || '',
     startAt: iso(doc.startAt),
     location: doc.location || '',
     cover: doc.cover || null,
     registrationUrl: doc.registrationUrl || '',
+    body,
     published: Boolean(doc.published),
     createdAt: iso(doc.createdAt),
     updatedAt: iso(doc.updatedAt),
@@ -404,67 +423,107 @@ export async function deleteOffer(id: string): Promise<Offer | null> {
 }
 
 export async function listEvents(publishedOnly = false): Promise<EventPost[]> {
-  if (isMysqlConfigured()) return mysqlListDocs<EventPost>('event', publishedOnly)
+  if (isMysqlConfigured()) {
+    const docs = await mysqlListDocs<EventPost>('event', publishedOnly)
+    return docs.map((doc) => serializeEvent(doc))
+  }
   if (!isMongoConfigured()) return []
   await ensureIndexes()
   const collection = await getCollection<WithDates<EventPost>>('events')
   const filter = publishedOnly ? { published: true } : {}
   const docs = await collection.find(filter).sort({ startAt: 1 }).toArray()
-  return docs.map((doc) => serializeEvent(doc as WithDates<EventPost> & { _id: ObjectId }))
+  return docs.map((doc) => serializeEvent(doc))
 }
 
 export async function getEventById(id: string): Promise<EventPost | null> {
-  if (isMysqlConfigured()) return mysqlGetDoc<EventPost>('event', id)
+  if (isMysqlConfigured()) {
+    const doc = await mysqlGetDoc<EventPost>('event', id)
+    return doc ? serializeEvent(doc) : null
+  }
   if (!isMongoConfigured() || !ObjectId.isValid(id)) return null
   const collection = await getCollection<WithDates<EventPost>>('events')
   const doc = await collection.findOne({ _id: new ObjectId(id) })
-  return doc ? serializeEvent(doc as WithDates<EventPost> & { _id: ObjectId }) : null
+  return doc ? serializeEvent(doc) : null
+}
+
+export async function getEventBySlug(slug: string): Promise<EventPost | null> {
+  if (!slug) return null
+  if (isMysqlConfigured()) {
+    const doc = await mysqlGetDocBySlug<EventPost>('event', slug)
+    const item = doc ? serializeEvent(doc) : null
+    if (item) return item
+    const listed = await listEvents(false)
+    return listed.find((event) => event.slug === slug) || null
+  }
+  if (!isMongoConfigured()) return null
+  await ensureIndexes()
+  const collection = await getCollection<WithDates<EventPost>>('events')
+  const doc = await collection.findOne({ slug })
+  return doc ? serializeEvent(doc) : null
 }
 
 export async function createEvent(input: Omit<EventPost, '_id' | 'createdAt' | 'updatedAt'>): Promise<EventPost> {
+  const slug = await uniqueSlug('event', input.slug || slugifyName(input.title) || 'event')
+  const body = parseEventBody(input.body, input.description)
+  const description = input.description || excerptFromBody(body)
   if (isMysqlConfigured()) {
-    return mysqlInsertDoc<EventPost>('event', {
+    const inserted = await mysqlInsertDoc<EventPost>('event', {
       title: input.title,
-      description: input.description,
+      slug,
+      description,
       startAt: parseDate(input.startAt).toISOString(),
       location: input.location,
       cover: input.cover || null,
       registrationUrl: input.registrationUrl,
+      body,
       published: input.published,
     })
+    return serializeEvent(inserted)
   }
   await ensureIndexes()
   const now = new Date()
   const doc = {
     title: input.title,
-    description: input.description,
+    slug,
+    description,
     startAt: parseDate(input.startAt, now),
     location: input.location,
     cover: input.cover || null,
     registrationUrl: input.registrationUrl,
+    body,
     published: input.published,
     createdAt: now,
     updatedAt: now,
   }
   const collection = await getCollection<WithDates<EventPost> & { _id?: ObjectId }>('events')
   const result = await collection.insertOne(doc as WithDates<EventPost>)
-  return serializeEvent({ ...doc, _id: result.insertedId } as WithDates<EventPost> & { _id: ObjectId })
+  return serializeEvent({ ...doc, _id: result.insertedId })
 }
 
 export async function updateEvent(id: string, input: Partial<EventPost>): Promise<EventPost | null> {
+  const existing = await getEventById(id)
+  if (!existing) return null
+  const title = input.title !== undefined ? input.title : existing.title
+  const slug = input.slug !== undefined || input.title !== undefined
+    ? await uniqueSlug('event', input.slug || slugifyName(title) || existing.slug || 'event', id)
+    : existing.slug
+  const body = input.body !== undefined ? parseEventBody(input.body, input.description || existing.description) : existing.body
+  const description = input.description !== undefined ? input.description : existing.description || excerptFromBody(body)
+  const next = {
+    ...input,
+    title,
+    slug,
+    body,
+    description,
+    startAt: input.startAt !== undefined ? parseDate(input.startAt).toISOString() : existing.startAt,
+  }
   if (isMysqlConfigured()) {
-    const existing = await getEventById(id)
-    if (!existing) return null
-    return mysqlUpdateDoc<EventPost>('event', id, {
-      ...input,
-      startAt: input.startAt !== undefined ? parseDate(input.startAt).toISOString() : existing.startAt,
-    })
+    const updated = await mysqlUpdateDoc<EventPost>('event', id, next)
+    return updated ? serializeEvent(updated) : null
   }
   if (!ObjectId.isValid(id)) return null
   const collection = await getCollection<WithDates<EventPost>>('events')
-  const $set: Record<string, unknown> = { updatedAt: new Date() }
-  if (input.title !== undefined) $set.title = input.title
-  if (input.description !== undefined) $set.description = input.description
+  const $set: Record<string, unknown> = { updatedAt: new Date(), title, slug, body, description }
   if (input.startAt !== undefined) $set.startAt = parseDate(input.startAt)
   if (input.location !== undefined) $set.location = input.location
   if (input.cover !== undefined) $set.cover = input.cover
@@ -836,17 +895,18 @@ export async function deleteCompanyProfilePage(id: string): Promise<CompanyProfi
 }
 
 async function storeProfilePageImage(buffer: Buffer, filename: string, index: number): Promise<MediaAsset> {
+  const prepared = await prepareStoredImage(buffer, filename, 'image/jpeg')
   if (isMysqlConfigured()) {
     return mysqlSaveFile({
       kind: 'profile',
       ownerKey: `company-profile/${index}`,
-      filename,
-      mime: 'image/jpeg',
-      buffer,
+      filename: prepared.filename,
+      mime: prepared.mime,
+      buffer: prepared.buffer,
     })
   }
   if (!isCloudinaryConfigured()) throw new Error('Image storage is not configured')
-  const uploaded = await uploadSiteImage(buffer, 'tarumed/profile', `pdf-${index}`)
+  const uploaded = await uploadSiteImage(prepared.buffer, 'tarumed/profile', `pdf-${index}`)
   return { publicId: uploaded.public_id, secureUrl: uploaded.secure_url }
 }
 

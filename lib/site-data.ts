@@ -148,6 +148,11 @@ export async function listEvents(publishedOnly = true): Promise<EventPost[]> {
   return payload?.data || []
 }
 
+export async function getEventBySlug(slug: string): Promise<EventPost | null> {
+  const payload = await backendJson<{ data: EventPost }>(`/api/events/${encodeURIComponent(slug)}`)
+  return payload?.data || null
+}
+
 export async function listInstallations(publishedOnly = true): Promise<Installation[]> {
   const path = publishedOnly ? '/api/installations' : '/api/admin/installations'
   const payload = await backendJson<{ data: Installation[] }>(path)

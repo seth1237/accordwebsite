@@ -20,7 +20,7 @@ const nextConfig = {
   ...(isProdBuild ? { output: 'standalone' } : {}),
   poweredByHeader: false,
   compress: true,
-  serverExternalPackages: ['mysql2'],
+  serverExternalPackages: ['mysql2', 'sharp'],
   experimental: {
     proxyClientMaxBodySize: '50mb',
     serverActions: { bodySizeLimit: '50mb' },
