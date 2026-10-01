@@ -32,7 +32,7 @@ type SiteSettings = {
   updatedAt: Date
 }
 
-const MYSQL_SCHEMA_VERSION = 4
+const MYSQL_SCHEMA_VERSION = 5
 
 type MysqlState = {
   pool: Pool | null
@@ -363,6 +363,27 @@ async function applyMysqlSchema() {
       last_seen_at DATETIME NOT NULL,
       PRIMARY KEY (visit_date, visitor_id, path),
       KEY visit_date (visit_date)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+  `)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS accord_nx_event_likes (
+      event_id INT UNSIGNED NOT NULL,
+      visitor_id VARCHAR(64) NOT NULL,
+      created_at DATETIME NOT NULL,
+      PRIMARY KEY (event_id, visitor_id),
+      KEY event_id (event_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+  `)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS accord_nx_event_comments (
+      id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+      event_id INT UNSIGNED NOT NULL,
+      visitor_id VARCHAR(64) NOT NULL DEFAULT '',
+      name VARCHAR(80) NOT NULL,
+      body TEXT NOT NULL,
+      created_at DATETIME NOT NULL,
+      PRIMARY KEY (id),
+      KEY event_created (event_id, created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
   `)
 }
@@ -1332,4 +1353,113 @@ export async function mysqlGetVisitorReport(input: { period?: unknown; from?: un
     },
     series: fillVisitorSeries(period, seriesFrom, range.to, mapVisitRows(seriesRows[0])),
   }
+}
+
+export type EventCommentPublic = {
+  _id: string
+  name: string
+  body: string
+  createdAt: string
+}
+
+export type EventEngagement = {
+  likes: number
+  liked: boolean
+  comments: EventCommentPublic[]
+}
+
+function mapEventComment(row: RowDataPacket): EventCommentPublic {
+  return {
+    _id: String(row.id),
+    name: String(row.name || 'Guest'),
+    body: String(row.body || ''),
+    createdAt: iso(row.created_at),
+  }
+}
+
+export async function mysqlGetEventEngagement(eventId: string, visitorId = ''): Promise<EventEngagement> {
+  const id = mysqlId(eventId)
+  if (!id) return { likes: 0, liked: false, comments: [] }
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const visitor = sanitizeVisitorId(visitorId)
+  const [countRows] = await pool.query<RowDataPacket[]>(
+    'SELECT COUNT(*) AS total FROM accord_nx_event_likes WHERE event_id = ?',
+    [id],
+  )
+  let liked = false
+  if (visitor) {
+    const [likeRows] = await pool.query<RowDataPacket[]>(
+      'SELECT 1 AS liked FROM accord_nx_event_likes WHERE event_id = ? AND visitor_id = ? LIMIT 1',
+      [id, visitor],
+    )
+    liked = Boolean(likeRows[0])
+  }
+  const [commentRows] = await pool.query<RowDataPacket[]>(
+    'SELECT id, name, body, created_at FROM accord_nx_event_comments WHERE event_id = ? ORDER BY created_at ASC, id ASC',
+    [id],
+  )
+  return {
+    likes: Number(countRows[0]?.total) || 0,
+    liked,
+    comments: commentRows.map(mapEventComment),
+  }
+}
+
+export async function mysqlToggleEventLike(eventId: string, visitorId: string) {
+  const id = mysqlId(eventId)
+  const visitor = sanitizeVisitorId(visitorId)
+  if (!id || !visitor) return mysqlGetEventEngagement(eventId, visitorId)
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const [existing] = await pool.query<RowDataPacket[]>(
+    'SELECT 1 AS liked FROM accord_nx_event_likes WHERE event_id = ? AND visitor_id = ? LIMIT 1',
+    [id, visitor],
+  )
+  if (existing[0]) {
+    await pool.query('DELETE FROM accord_nx_event_likes WHERE event_id = ? AND visitor_id = ?', [id, visitor])
+  } else {
+    await pool.query('INSERT INTO accord_nx_event_likes (event_id, visitor_id, created_at) VALUES (?, ?, ?)', [
+      id,
+      visitor,
+      new Date(),
+    ])
+  }
+  return mysqlGetEventEngagement(eventId, visitor)
+}
+
+export async function mysqlAddEventComment(input: {
+  eventId: string
+  visitorId: string
+  name: string
+  body: string
+}) {
+  const id = mysqlId(input.eventId)
+  const visitor = sanitizeVisitorId(input.visitorId)
+  const name = input.name.trim().slice(0, 80)
+  const body = input.body.trim().slice(0, 1000)
+  if (!id || !name || !body) throw new Error('Name and comment are required')
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  if (visitor) {
+    const [recent] = await pool.query<RowDataPacket[]>(
+      'SELECT COUNT(*) AS total FROM accord_nx_event_comments WHERE event_id = ? AND visitor_id = ? AND created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)',
+      [id, visitor],
+    )
+    if (Number(recent[0]?.total) >= 3) throw new Error('Please wait before posting another comment')
+  }
+  await pool.query(
+    'INSERT INTO accord_nx_event_comments (event_id, visitor_id, name, body, created_at) VALUES (?, ?, ?, ?, ?)',
+    [id, visitor, name, body, new Date()],
+  )
+  return mysqlGetEventEngagement(input.eventId, visitor)
+}
+
+export async function mysqlDeleteEventEngagement(eventId: string) {
+  const id = mysqlId(eventId)
+  if (!id) return
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  await pool.query('DELETE FROM accord_nx_event_likes WHERE event_id = ?', [id])
+  await pool.query('DELETE FROM accord_nx_event_comments WHERE event_id = ?', [id])
 }

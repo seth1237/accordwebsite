@@ -19,14 +19,17 @@ import { prepareStoredImage } from '@/lib/image-convert'
 import { ensureIndexes, getCollection, isMongoConfigured } from '@/lib/mongodb'
 import {
   isMysqlConfigured,
+  mysqlAddEventComment,
   mysqlCatalogueAnalytics,
   mysqlCreateCatalogue,
   mysqlDeleteCatalogue,
   mysqlDeleteDoc,
+  mysqlDeleteEventEngagement,
   mysqlGetCatalogue,
   mysqlGetDoc,
   mysqlGetDocByPayloadFrom,
   mysqlGetDocBySlug,
+  mysqlGetEventEngagement,
   mysqlInsertDoc,
   mysqlListCatalogues,
   mysqlListDocs,
@@ -34,6 +37,7 @@ import {
   mysqlListProfilePages,
   mysqlRecordCatalogueDownload,
   mysqlSaveFile,
+  mysqlToggleEventLike,
   mysqlUniqueSlug,
   mysqlUpdateDoc,
 } from '@/lib/mysql'
@@ -534,11 +538,68 @@ export async function updateEvent(id: string, input: Partial<EventPost>): Promis
 }
 
 export async function deleteEvent(id: string): Promise<EventPost | null> {
-  if (isMysqlConfigured()) return mysqlDeleteDoc<EventPost>('event', id)
+  if (isMysqlConfigured()) {
+    const existing = await mysqlDeleteDoc<EventPost>('event', id)
+    if (existing) await mysqlDeleteEventEngagement(id).catch(() => null)
+    return existing
+  }
   const existing = await getEventById(id)
   if (!existing) return null
   await (await getCollection('events')).deleteOne({ _id: new ObjectId(id) })
   return existing
+}
+
+function emptyEngagement() {
+  return { likes: 0, liked: false, comments: [] }
+}
+
+function sanitizeCommentName(value: unknown) {
+  return String(value || '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80)
+}
+
+function sanitizeCommentBody(value: unknown) {
+  return String(value || '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/\r\n/g, '\n')
+    .replace(/[^\S\n]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .slice(0, 1000)
+}
+
+async function publishedEventBySlug(slug: string) {
+  const item = await getEventBySlug(slug)
+  return item?.published ? item : null
+}
+
+export async function getEventEngagement(slug: string, visitorId = '') {
+  const item = await publishedEventBySlug(slug)
+  if (!item) return null
+  if (!isMysqlConfigured()) return emptyEngagement()
+  return mysqlGetEventEngagement(item._id, visitorId)
+}
+
+export async function toggleEventLike(slug: string, visitorId: string) {
+  const item = await publishedEventBySlug(slug)
+  if (!item) return null
+  if (!isMysqlConfigured()) return emptyEngagement()
+  return mysqlToggleEventLike(item._id, visitorId)
+}
+
+export async function addEventComment(input: { slug: string; visitorId: string; name: string; body: string; honeypot?: string }) {
+  if (String(input.honeypot || '').trim()) return getEventEngagement(input.slug, input.visitorId)
+  const item = await publishedEventBySlug(input.slug)
+  if (!item) return null
+  const name = sanitizeCommentName(input.name)
+  const body = sanitizeCommentBody(input.body)
+  if (name.length < 2 || body.length < 3) throw new Error('Name and comment are required')
+  if ((body.match(/https?:\/\//gi) || []).length > 2) throw new Error('Please remove extra links from the comment')
+  if (!isMysqlConfigured()) throw new Error('Comments are unavailable right now')
+  return mysqlAddEventComment({ eventId: item._id, visitorId: input.visitorId, name, body })
 }
 
 export async function listCatalogues(): Promise<Catalogue[]> {

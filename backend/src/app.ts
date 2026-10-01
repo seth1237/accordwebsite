@@ -28,6 +28,9 @@ import {
   getCompanyProfilePageById,
   getEventById,
   getEventBySlug,
+  getEventEngagement,
+  addEventComment,
+  toggleEventLike,
   getInstallationById,
   getInstallationBySlug,
   getManufacturerByToken,
@@ -257,6 +260,44 @@ app.get('/api/events/:slug', async (c) => {
   const item = await getEventBySlug(c.req.param('slug'))
   if (!item || !item.published) return c.json({ success: false, message: 'Event not found' }, 404)
   return c.json({ success: true, data: item })
+})
+app.get('/api/events/:slug/engagement', async (c) => {
+  try {
+    const data = await getEventEngagement(c.req.param('slug'), textValue(c.req.query('visitorId'), 64))
+    if (!data) return c.json({ success: false, message: 'Event not found' }, 404)
+    return c.json({ success: true, data })
+  } catch (error) {
+    if (isMysqlConnectError(error)) return c.json({ success: true, data: { likes: 0, liked: false, comments: [] } })
+    return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not load comments' }, 500)
+  }
+})
+app.post('/api/events/:slug/like', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}))
+    const data = await toggleEventLike(c.req.param('slug'), textValue(body.visitorId, 64))
+    if (!data) return c.json({ success: false, message: 'Event not found' }, 404)
+    return c.json({ success: true, data })
+  } catch (error) {
+    if (isMysqlConnectError(error)) return c.json({ success: false, message: 'Likes are unavailable right now' }, 503)
+    return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not save like' }, 500)
+  }
+})
+app.post('/api/events/:slug/comments', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}))
+    const data = await addEventComment({
+      slug: c.req.param('slug'),
+      visitorId: textValue(body.visitorId, 64),
+      name: textValue(body.name, 80),
+      body: textValue(body.body || body.comment, 1000),
+      honeypot: textValue(body.website, 120),
+    })
+    if (!data) return c.json({ success: false, message: 'Event not found' }, 404)
+    return c.json({ success: true, data })
+  } catch (error) {
+    if (isMysqlConnectError(error)) return c.json({ success: false, message: 'Comments are unavailable right now' }, 503)
+    return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not post comment' }, 400)
+  }
 })
 app.get('/api/installations', async (c) => c.json({ success: true, data: await listInstallations(true).catch(() => []) }))
 app.get('/api/installations/:slug', async (c) => {

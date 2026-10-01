@@ -5,9 +5,9 @@ import { SiteFooter } from '@/components/site-footer'
 import { SiteHeader } from '@/components/site-header'
 import { JsonLd } from '@/components/json-ld'
 import { EventBodyView, EventMeta } from '@/components/event-body-view'
+import { EventEngagement } from '@/components/event-engagement'
 import { EventShare } from '@/components/event-share'
 import { eventHref } from '@/lib/content'
-import { eventPoster } from '@/lib/event-body'
 import { articleJsonLd, breadcrumbJsonLd, pageMetadata } from '@/lib/seo'
 import { ROUTES } from '@/lib/routes'
 import { getEventBySlug } from '@/lib/site-data'
@@ -81,6 +81,7 @@ export default async function EventPostPage({ params }: { params: Promise<{ slug
             <EventShare item={item} />
           </p>
         ) : null}
+        <EventEngagement slug={item.slug} />
       </article>
       <SiteFooter />
     </main>
