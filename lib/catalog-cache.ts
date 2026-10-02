@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { Catalog } from '@/lib/catalog'
 
@@ -13,6 +13,18 @@ export function rememberCatalog(catalog: Catalog) {
 
 export function lastCatalog(): Catalog | null {
   return memory
+}
+
+export function forgetCatalog() {
+  memory = null
+}
+
+export async function clearCatalogCache() {
+  forgetCatalog()
+  if (process.env.NODE_ENV === 'production') return
+  try {
+    await unlink(cacheFile)
+  } catch {}
 }
 
 export async function readDevCatalogCache(): Promise<Catalog | null> {

@@ -109,6 +109,11 @@ export async function getCatalog(categoryIds?: string[]): Promise<Catalog> {
   return (await getSiteBootstrap()).catalog
 }
 
+export async function getFullCatalog(): Promise<Catalog> {
+  const payload = await backendJson<{ catalog: Catalog }>('/api/catalog')
+  return payload?.catalog || emptyCatalog
+}
+
 export async function getCatalogProduct(idOrSlug: string): Promise<CatalogProduct | null> {
   const payload = await backendJson<{ data: CatalogProduct }>(`/api/products/${encodeURIComponent(idOrSlug)}`)
   return payload?.data || null

@@ -5,7 +5,7 @@ import { bodyLimit } from 'hono/body-limit'
 import { z } from 'zod'
 import { ADMIN_COOKIE, adminCookieOptions, authenticateAdmin, createAdminSessionValue, parseAdminSessionValue } from '../../lib/auth-core'
 import { slugifyName } from '../../lib/catalog'
-import { getCatalog, getCatalogProduct, getPriceVisibility } from '../../lib/catalog-data'
+import { createCatalogCategory, createCatalogProduct, getCatalog, getCatalogProduct, getPriceVisibility } from '../../lib/catalog-data'
 import { csvIds } from '../../lib/content'
 import { excerptFromBody, parseEventBody } from '../../lib/event-body'
 import { prepareStoredImage } from '../../lib/image-convert'
@@ -163,6 +163,11 @@ app.get('/health', (c) => c.json({ ok: true, service: 'accord-backend' }))
 const BOOTSTRAP_TTL_MS = 15_000
 let bootstrapMemo: { at: number; payload: Record<string, unknown> } | null = null
 let bootstrapInflight: Promise<Record<string, unknown>> | null = null
+
+function invalidatePublicCatalog() {
+  bootstrapMemo = null
+  bootstrapInflight = null
+}
 
 async function loadBootstrap() {
   const catalog = await getCatalog().catch(() => ({ products: [], categories: [] }))
@@ -546,6 +551,55 @@ app.post('/api/admin/catalog-import', async (c) => {
     return c.json({ success: true, data: await importCatalogBatch(limit) })
   } catch (error) {
     return c.json({ success: false, message: databaseErrorMessage(error) }, 503)
+  }
+})
+
+app.post('/api/admin/categories', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  if (!isMysqlConfigured()) return c.json({ success: false, message: 'MySQL is not configured' }, 503)
+  const form = await c.req.formData()
+  const name = formText(form, 'name')
+  if (!name) return c.json({ success: false, message: 'Category name is required' }, 400)
+  try {
+    const data = await createCatalogCategory({ name, description: formText(form, 'description') })
+    invalidatePublicCatalog()
+    return c.json({ success: true, data })
+  } catch (error) {
+    return c.json({ success: false, message: databaseErrorMessage(error) }, 400)
+  }
+})
+
+app.post('/api/admin/products', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  if (!isMysqlConfigured()) return c.json({ success: false, message: 'MySQL is not configured' }, 503)
+  const form = await c.req.formData()
+  const name = formText(form, 'name')
+  if (!name) return c.json({ success: false, message: 'Product name is required' }, 400)
+  try {
+    const product = await createCatalogProduct({
+      name,
+      description: formText(form, 'description'),
+      details: formText(form, 'details'),
+      categoryId: formText(form, 'categoryId'),
+      categoryName: formText(form, 'categoryName'),
+      manufacturer: formText(form, 'manufacturer'),
+      price: Number(formText(form, 'price')) || 0,
+      inStock: form.get('inStock') === 'true',
+      featured: form.get('featured') === 'true',
+    })
+    const files = form.getAll('file').filter((item): item is File => item instanceof File)
+    for (const file of files) {
+      if (!file.type.startsWith('image/') || file.size > 8 * 1024 * 1024) continue
+      const buffer = Buffer.from(await file.arrayBuffer())
+      const prepared = await prepareStoredImage(buffer, file.name || 'product.jpg', file.type)
+      await mysqlAddProductImage(product.id, prepared.buffer, prepared.filename, prepared.mime)
+    }
+    invalidatePublicCatalog()
+    return c.json({ success: true, data: product })
+  } catch (error) {
+    return c.json({ success: false, message: databaseErrorMessage(error) }, 400)
   }
 })
 

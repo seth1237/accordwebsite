@@ -1,14 +1,25 @@
 import { cache } from 'react'
-import { lastCatalog, readDevCatalogCache, writeDevCatalogCache } from '@/lib/catalog-cache'
+import { lastCatalog, readDevCatalogCache, writeDevCatalogCache, clearCatalogCache } from '@/lib/catalog-cache'
 import {
   assignSlugs,
   categoriesFromProducts,
+  mergeCatalogCategories,
   mergeOverlay,
+  publicCategorySlug,
   type Catalog,
+  type CatalogCategory,
   type CatalogProduct,
 } from '@/lib/catalog'
 import { getProductMetricsMap, getProductContentMap, getSiteSettings, type ProductContent } from '@/lib/mongodb'
-import { isMysqlConfigured, mysqlListCatalogProducts, mysqlSetLocalCatalogReady } from '@/lib/mysql'
+import {
+  isMysqlConfigured,
+  mysqlCreateCatalogProduct,
+  mysqlCreateCategory,
+  mysqlEnsureCategory,
+  mysqlListCategories,
+  mysqlListCatalogProducts,
+  mysqlSetLocalCatalogReady,
+} from '@/lib/mysql'
 
 async function loadRawProducts(): Promise<CatalogProduct[]> {
   if (!isMysqlConfigured()) return []
@@ -24,6 +35,16 @@ async function loadRawProducts(): Promise<CatalogProduct[]> {
 
 const CATALOG_TTL_MS = process.env.NODE_ENV === 'production' ? 60_000 : 15_000
 
+let catalogGeneration = 0
+
+export async function invalidateCatalog() {
+  catalogGeneration += 1
+  const state = catalogMemoState()
+  state.memo = null
+  state.inflight.clear()
+  await clearCatalogCache()
+}
+
 type CatalogMemoState = {
   memo: { key: string; at: number; catalog: Catalog } | null
   inflight: Map<string, Promise<Catalog>>
@@ -38,11 +59,13 @@ function catalogMemoState(): CatalogMemoState {
   return globalForCatalog.__accordCatalogMemo
 }
 
-const getCatalogBase = cache(async (categoryKey: string): Promise<Catalog> => {
+const getCatalogBase = cache(async (categoryKey: string, generation: number): Promise<Catalog> => {
+  void generation
   const categoryIds = categoryKey ? categoryKey.split(',') : undefined
-  const [rawProducts, content] = await Promise.all([
+  const [rawProducts, content, storedCategories] = await Promise.all([
     loadRawProducts(),
     getProductContentMap().catch(() => new Map<string, ProductContent>()),
+    mysqlListCategories().catch(() => [] as CatalogCategory[]),
   ])
 
   const merged = assignSlugs(
@@ -55,13 +78,13 @@ const getCatalogBase = cache(async (categoryKey: string): Promise<Catalog> => {
 
   return {
     products,
-    categories: categoriesFromProducts(categoryIds?.length ? merged : products),
+    categories: mergeCatalogCategories(storedCategories, categoriesFromProducts(categoryIds?.length ? merged : products)),
   }
 })
 
 async function loadCatalog(key: string, categoryIds?: string[]): Promise<Catalog> {
   const [base, metrics] = await Promise.all([
-    getCatalogBase(key),
+    getCatalogBase(key, catalogGeneration),
     getProductMetricsMap().catch(() => new Map()),
   ])
 
@@ -134,4 +157,55 @@ export async function getRelatedProducts(product: CatalogProduct, limit = 8): Pr
 export async function getPriceVisibility() {
   const settings = await getSiteSettings().catch(() => ({ showPrices: true }))
   return settings.showPrices !== false
+}
+
+export async function createCatalogCategory(input: { name: string; description?: string }) {
+  if (!isMysqlConfigured()) throw new Error('MySQL is not configured')
+  const category = await mysqlCreateCategory(input)
+  await invalidateCatalog()
+  return category
+}
+
+export async function createCatalogProduct(input: {
+  name: string
+  description?: string
+  details?: string
+  categoryId?: string
+  categoryName?: string
+  manufacturer?: string
+  price?: number
+  inStock?: boolean
+  featured?: boolean
+}) {
+  if (!isMysqlConfigured()) throw new Error('MySQL is not configured')
+  const name = String(input.name || '').trim()
+  if (!name) throw new Error('Enter a product name')
+  let categoryName = String(input.categoryName || '').trim()
+  let categoryId = String(input.categoryId || '').trim()
+  if (!categoryName && categoryId) {
+    const [stored, catalog] = await Promise.all([
+      mysqlListCategories().catch(() => []),
+      getCatalog().catch(() => ({ products: [], categories: [] as CatalogCategory[] })),
+    ])
+    categoryName =
+      catalog.categories.find((item) => item.slug === categoryId || item._id === categoryId)?.name
+      || stored.find((item) => item.slug === categoryId || item._id === categoryId)?.name
+      || categoryId
+  }
+  if (!categoryName) throw new Error('Choose or enter a category')
+  const category = await mysqlEnsureCategory({ name: categoryName, slug: categoryId || publicCategorySlug(categoryName) })
+  const product = await mysqlCreateCatalogProduct({
+    name,
+    description: input.description,
+    details: input.details || input.description,
+    categoryId: category.slug,
+    categoryName: category.name,
+    manufacturer: input.manufacturer,
+    price: input.price,
+    inStock: input.inStock,
+    featured: input.featured,
+  })
+  await mysqlSetLocalCatalogReady(true).catch(() => null)
+  await invalidateCatalog()
+  return product
 }

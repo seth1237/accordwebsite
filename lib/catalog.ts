@@ -248,6 +248,24 @@ export function categoriesFromProducts(products: CatalogProduct[]): CatalogCateg
   return [...counts.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
 }
 
+export function mergeCatalogCategories(stored: CatalogCategory[], fromProducts: CatalogCategory[]): CatalogCategory[] {
+  const map = new Map<string, CatalogCategory>()
+  for (const category of stored) {
+    const slug = category.slug || publicCategorySlug(category.name) || category._id
+    map.set(slug, { ...category, _id: slug, slug, count: 0 })
+  }
+  for (const category of fromProducts) {
+    const existing = map.get(category.slug)
+    if (existing) {
+      existing.count = category.count
+      if (!existing.name) existing.name = category.name
+    } else {
+      map.set(category.slug, category)
+    }
+  }
+  return [...map.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+}
+
 export function homepageProducts(products: CatalogProduct[], limit = 6): CatalogProduct[] {
   const picked: CatalogProduct[] = []
   const seen = new Set<string>()

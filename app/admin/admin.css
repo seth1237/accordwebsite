@@ -34,6 +34,7 @@
 .card-title span { display: block; color: #789096; font-size: 11px; margin-top: 5px; }
 .admin-message { background: #e4f5ef; color: #087f85; padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; }
 .catalog-import-card { margin-bottom: 18px; }
+.admin-create-bar { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 18px; }
 .catalog-import-card .card-title { align-items: center; }
 .catalog-import-meta { margin: 0; font-size: 13px; color: #60767d; }
 .catalog-import-meta b { color: #123744; }

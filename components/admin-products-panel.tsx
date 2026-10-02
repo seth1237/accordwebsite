@@ -35,7 +35,7 @@ export function AdminProductsPanel({
   const [uploadKind, setUploadKind] = useState<Record<string, 'photo' | 'installation'>>({})
 
   const categoryOptions = useMemo(() => {
-    if (categories.length) return categories.filter((category) => category.count > 0)
+    if (categories.length) return [...categories].sort((a, b) => a.name.localeCompare(b.name))
     const map = new Map<string, CatalogCategory>()
     for (const product of products) {
       const current = map.get(product.categoryId)

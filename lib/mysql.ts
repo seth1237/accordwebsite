@@ -1,7 +1,8 @@
 import { setDefaultResultOrder } from 'node:dns'
 import mysql, { type Pool, type ResultSetHeader, type RowDataPacket } from 'mysql2/promise'
 import type { Catalogue, CatalogueDownload, CompanyProfilePage, MediaAsset } from '@/lib/content'
-import type { CatalogProduct } from '@/lib/catalog'
+import type { CatalogCategory, CatalogProduct } from '@/lib/catalog'
+import { publicCategorySlug, slugifyName } from '@/lib/catalog'
 import { clampRange, defaultRange, fillVisitorSeries, isIsoDate, monthStart, parsePeriod, weekStart } from '@/lib/visitor-report'
 
 setDefaultResultOrder('ipv4first')
@@ -32,7 +33,7 @@ type SiteSettings = {
   updatedAt: Date
 }
 
-const MYSQL_SCHEMA_VERSION = 5
+const MYSQL_SCHEMA_VERSION = 6
 
 type MysqlState = {
   pool: Pool | null
@@ -384,6 +385,16 @@ async function applyMysqlSchema() {
       created_at DATETIME NOT NULL,
       PRIMARY KEY (id),
       KEY event_created (event_id, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+  `)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS accord_nx_categories (
+      id VARCHAR(128) NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      description TEXT NOT NULL,
+      created_at DATETIME NOT NULL,
+      updated_at DATETIME NOT NULL,
+      PRIMARY KEY (id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
   `)
 }
@@ -1174,6 +1185,129 @@ export async function mysqlUpsertCatalogProduct(product: CatalogProduct) {
       now,
     ],
   )
+}
+
+function mapCategoryRow(row: RowDataPacket): CatalogCategory {
+  return {
+    _id: String(row.id),
+    name: String(row.name || row.id),
+    slug: String(row.id),
+    count: 0,
+    description: String(row.description || ''),
+  }
+}
+
+export async function mysqlListCategories(): Promise<CatalogCategory[]> {
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const [rows] = await pool.query<RowDataPacket[]>(
+    'SELECT id, name, description FROM accord_nx_categories ORDER BY name ASC',
+  )
+  return rows.map(mapCategoryRow)
+}
+
+export async function mysqlGetCategory(id: string) {
+  const slug = String(id || '').trim()
+  if (!slug) return null
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const [rows] = await pool.query<RowDataPacket[]>(
+    'SELECT id, name, description FROM accord_nx_categories WHERE id = ? LIMIT 1',
+    [slug],
+  )
+  return rows[0] ? mapCategoryRow(rows[0]) : null
+}
+
+export async function mysqlCreateCategory(input: { name: string; description?: string }) {
+  const name = String(input.name || '').trim()
+  const slug = publicCategorySlug(name)
+  if (!name || !slug) throw new Error('Enter a category name')
+  const existing = await mysqlGetCategory(slug)
+  if (existing) throw new Error('That category already exists')
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const now = new Date()
+  await pool.query(
+    'INSERT INTO accord_nx_categories (id, name, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+    [slug, name, String(input.description || '').trim(), now, now],
+  )
+  return mysqlGetCategory(slug) as Promise<CatalogCategory>
+}
+
+export async function mysqlEnsureCategory(input: { name: string; slug?: string; description?: string }) {
+  const name = String(input.name || '').trim()
+  const slug = input.slug || publicCategorySlug(name)
+  if (!name || !slug) throw new Error('Enter a category name')
+  const existing = await mysqlGetCategory(slug)
+  if (existing) return existing
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const now = new Date()
+  await pool.query(
+    'INSERT INTO accord_nx_categories (id, name, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name), updated_at = VALUES(updated_at)',
+    [slug, name, String(input.description || '').trim(), now, now],
+  )
+  return (await mysqlGetCategory(slug)) as CatalogCategory
+}
+
+async function mysqlUniqueProductValue(column: 'id' | 'slug', base: string) {
+  const root = (base || 'product').slice(0, 60)
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  let value = root
+  let n = 2
+  while (n < 50) {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT ${column} FROM accord_nx_products WHERE ${column} = ? LIMIT 1`,
+      [value],
+    )
+    if (!rows[0]) return value
+    value = `${root}-${n}`.slice(0, 64)
+    n += 1
+  }
+  return `${root}-${Date.now().toString(36)}`.slice(0, 64)
+}
+
+export async function mysqlCreateCatalogProduct(input: {
+  name: string
+  description?: string
+  details?: string
+  categoryId: string
+  categoryName: string
+  manufacturer?: string
+  price?: number
+  inStock?: boolean
+  featured?: boolean
+}) {
+  const name = String(input.name || '').trim()
+  if (!name) throw new Error('Enter a product name')
+  const slugBase = slugifyName(name) || 'product'
+  const slug = await mysqlUniqueProductValue('slug', slugBase)
+  const id = await mysqlUniqueProductValue('id', `m-${slugBase}`)
+  const product: CatalogProduct = {
+    id,
+    name,
+    description: String(input.description || '').trim(),
+    details: String(input.details || input.description || '').trim(),
+    categoryId: input.categoryId,
+    categoryName: input.categoryName,
+    price: Number(input.price) || 0,
+    unit: 'unit',
+    stock: 0,
+    inStock: input.inStock !== false,
+    image: null,
+    images: [],
+    imageAssets: [],
+    manufacturer: String(input.manufacturer || '').trim() || undefined,
+    clicks: 0,
+    shares: 0,
+    slug,
+    shopUrl: `/product/${slug}`,
+    featured: Boolean(input.featured),
+    createdOn: new Date().toISOString(),
+  }
+  await mysqlUpsertCatalogProduct(product)
+  return product
 }
 
 export async function mysqlListCatalogProducts(): Promise<CatalogProduct[]> {
