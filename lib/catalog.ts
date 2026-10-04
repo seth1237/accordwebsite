@@ -48,6 +48,9 @@ export type CatalogProduct = {
   productType?: string | null
   featured: boolean
   createdOn?: string
+  onOffer?: boolean
+  offerId?: string
+  offerLabel?: string
 }
 
 export type CatalogCategory = {

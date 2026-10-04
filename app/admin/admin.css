@@ -151,6 +151,12 @@
 .admin-job-preview img { width: 96px; height: 72px; object-fit: cover; border-radius: 8px; background: #eef3f2; }
 .admin-check { display: flex !important; flex-direction: row !important; align-items: center; gap: 8px; font-weight: 600; }
 .admin-job-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.offer-picker { display: grid; gap: 10px; }
+.offer-picked { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+.offer-pick-row { justify-content: flex-start; }
+.offer-history { width: 100%; border-collapse: collapse; font-size: 13px; }
+.offer-history th, .offer-history td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #e4eeec; }
+.offer-history th { color: #60767d; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
 .admin-job-placeholder { width: 64px; height: 64px; border-radius: 8px; background: #e8eef2; display: block; }
 .admin-submission-grid {
   display: grid;

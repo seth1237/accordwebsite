@@ -12,13 +12,15 @@ export type QuoteCartItem = {
   categoryName: string
   price: number
   quantity: number
+  onOffer?: boolean
+  offerId?: string
 }
 
 type QuoteCartContextValue = {
   items: QuoteCartItem[]
   count: number
   has: (id: string) => boolean
-  add: (product: Pick<CatalogProduct, 'id' | 'name' | 'slug' | 'categoryName' | 'price'>, quantity?: number) => void
+  add: (product: Pick<CatalogProduct, 'id' | 'name' | 'slug' | 'categoryName' | 'price' | 'onOffer' | 'offerId'>, quantity?: number) => void
   remove: (id: string) => void
   setQuantity: (id: string, quantity: number) => void
   clear: () => void
@@ -52,13 +54,13 @@ export function QuoteCartProvider({ children }: { children: React.ReactNode }) {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
   }, [items, ready])
 
-  const add = useCallback((product: Pick<CatalogProduct, 'id' | 'name' | 'slug' | 'categoryName' | 'price'>, quantity = 1) => {
+  const add = useCallback((product: Pick<CatalogProduct, 'id' | 'name' | 'slug' | 'categoryName' | 'price' | 'onOffer' | 'offerId'>, quantity = 1) => {
     setItems((current) => {
       const found = current.find((item) => item.id === product.id)
       if (found) {
         return current.map((item) => (
           item.id === product.id
-            ? { ...item, quantity: Math.min(1000, item.quantity + quantity) }
+            ? { ...item, quantity: Math.min(1000, item.quantity + quantity), onOffer: product.onOffer, offerId: product.offerId }
             : item
         ))
       }
@@ -69,6 +71,8 @@ export function QuoteCartProvider({ children }: { children: React.ReactNode }) {
         categoryName: product.categoryName,
         price: Number(product.price || 0),
         quantity: Math.max(1, quantity),
+        onOffer: product.onOffer,
+        offerId: product.offerId,
       }]
     })
   }, [])

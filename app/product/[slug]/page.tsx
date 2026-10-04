@@ -62,6 +62,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         productName={product.name}
         categoryId={product.categoryId}
         categoryName={product.categoryName}
+        offerId={product.offerId}
       />
       <SiteHeader />
       <section className="section product-page">
@@ -83,9 +84,13 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                   {product.manufacturer && <span className="product-brand">Brand: {product.manufacturer}</span>}
                 </div>
                 {product.distributedFor && <p className="product-distributed">Distributed for: {product.distributedFor}</p>}
+                {product.onOffer && <p className="offer-flag">{product.offerLabel || 'On offer'}</p>}
                 <p className={priceLabel === 'Request a quote' ? 'detail-price quote-note' : 'detail-price'}>
                   {priceLabel === 'Request a quote' ? 'Available on request' : priceLabel}
                 </p>
+                {product.onOffer && product.compareAt && product.compareAt > product.price ? (
+                  <p className="offer-was">Was {displayPrice({ price: product.compareAt }, showPrices)}</p>
+                ) : null}
                 <QuoteForm product={product} catalogueHref={catalogueHref} />
                 <dl className="product-sku-row">
                   <div>

@@ -4,13 +4,14 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowRight } from 'lucide-react'
 import { ROUTES } from '@/lib/routes'
-import { PLACEHOLDER_IMAGE, productHref, productImageSrc, type CatalogProduct } from '@/lib/catalog'
+import { PLACEHOLDER_IMAGE, displayPrice, productHref, productImageSrc, type CatalogProduct } from '@/lib/catalog'
 import { productImageAlt } from '@/lib/seo'
 import type { Catalogue } from '@/lib/content'
 import { useQuoteCart } from '@/components/quote-cart'
 
 export function ProductCard({
   product,
+  showPrice = true,
 }: {
   product: CatalogProduct
   showPrice?: boolean
@@ -39,10 +40,11 @@ export function ProductCard({
               }
             }}
           />
-          {product.productType && <span className="product-tag">{product.productType}</span>}
+          {product.onOffer ? <span className="product-tag offer-tag">On offer</span> : product.productType ? <span className="product-tag">{product.productType}</span> : null}
         </div>
         <div className="product-info">
           <h3>{product.name}</h3>
+          {product.onOffer && product.price > 0 ? <strong>{displayPrice(product, showPrice)}</strong> : null}
         </div>
       </Link>
       <div className="product-card-actions home-split">

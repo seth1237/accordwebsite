@@ -22,7 +22,8 @@ export const metadata: Metadata = pageMetadata({
 
 export default async function Page() {
   const [catalog, showPrices] = await Promise.all([getCatalog(), getPriceVisibility()])
-  const featured = homepageProducts(catalog.products, 12)
+  const onOffer = catalog.products.filter((product) => product.onOffer)
+  const featured = homepageProducts(catalog.products.filter((product) => !product.onOffer), Math.max(0, 12 - onOffer.length))
 
   return (
     <main className="min-h-screen">
@@ -30,6 +31,22 @@ export default async function Page() {
       <SiteHeader />
       <OfferBanner />
       <ShopShell>
+        {onOffer.length > 0 && (
+          <section id="offers" className="catalog-section">
+            <div className="section-heading">
+              <div>
+                <span className="kicker">On offer</span>
+                <h2>Priced deals this week</h2>
+              </div>
+              <Link href="/offers" className="text-link">All offers</Link>
+            </div>
+            <div className="product-grid">
+              {onOffer.map((product) => (
+                <ProductCard key={product.id} product={product} showPrice={showPrices} variant="home" />
+              ))}
+            </div>
+          </section>
+        )}
         <section id="products" className="catalog-section">
           <div className="section-heading">
             <div>
@@ -43,7 +60,7 @@ export default async function Page() {
               <ProductCard key={product.id} product={product} showPrice={showPrices} variant="home" />
             ))}
           </div>
-          {featured.length === 0 && (
+          {featured.length === 0 && onOffer.length === 0 && (
             <p className="empty-state">The shop catalogue is unavailable right now. Please refresh in a moment.</p>
           )}
         </section>

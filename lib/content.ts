@@ -27,13 +27,29 @@ export type Offer = {
   title: string
   description: string
   discountText: string
+  kind: 'products' | 'custom'
   productIds: string[]
+  price: number
+  compareAt: number
+  customProductId: string
   startDate: string
   endDate: string
   banner: MediaAsset | null
+  showHeader: boolean
   published: boolean
   createdAt: string
   updatedAt: string
+}
+
+export type OfferEvent = {
+  _id: string
+  offerId: string
+  productId: string
+  productName: string
+  eventType: 'click' | 'whatsapp'
+  path: string
+  visitorId: string
+  createdAt: string
 }
 
 export type EventPost = {

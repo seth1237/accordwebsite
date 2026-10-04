@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState, type FocusEvent, type PointerEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FocusEvent, type PointerEvent, type ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { ArrowRight, ChevronDown, Menu, ShoppingCart, X } from 'lucide-react'
@@ -44,10 +44,12 @@ export function SiteHeaderNav({
   categories,
   products,
   jobCount = 0,
+  offerHeader,
 }: {
   categories: NavCategory[]
   products: SearchProduct[]
   jobCount?: number
+  offerHeader?: ReactNode
 }) {
   const [open, setOpen] = useState(false)
   const [mobileCategory, setMobileCategory] = useState<string | null>(null)
@@ -156,12 +158,13 @@ export function SiteHeaderNav({
     }
   }, [open])
 
-  const headerClass = ['site-header', open && 'menu-open', scrolled && 'is-scrolled', megaOpen && 'mega-open']
+  const headerClass = ['site-header', open && 'menu-open', scrolled && 'is-scrolled', megaOpen && 'mega-open', offerHeader && 'has-offer-header']
     .filter(Boolean)
     .join(' ')
 
   return (
     <header className={headerClass}>
+      {offerHeader}
       <div className="header-bar">
         <div className="topline">
           <div className="shell flex items-center justify-between gap-4">

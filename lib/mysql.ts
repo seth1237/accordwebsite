@@ -1,6 +1,6 @@
 import { setDefaultResultOrder } from 'node:dns'
 import mysql, { type Pool, type ResultSetHeader, type RowDataPacket } from 'mysql2/promise'
-import type { Catalogue, CatalogueDownload, CompanyProfilePage, MediaAsset } from '@/lib/content'
+import type { Catalogue, CatalogueDownload, CompanyProfilePage, MediaAsset, OfferEvent } from '@/lib/content'
 import type { CatalogCategory, CatalogProduct } from '@/lib/catalog'
 import { publicCategorySlug, slugifyName } from '@/lib/catalog'
 import { clampRange, defaultRange, fillVisitorSeries, isIsoDate, monthStart, parsePeriod, weekStart } from '@/lib/visitor-report'
@@ -33,7 +33,7 @@ type SiteSettings = {
   updatedAt: Date
 }
 
-const MYSQL_SCHEMA_VERSION = 6
+const MYSQL_SCHEMA_VERSION = 7
 
 type MysqlState = {
   pool: Pool | null
@@ -395,6 +395,21 @@ async function applyMysqlSchema() {
       created_at DATETIME NOT NULL,
       updated_at DATETIME NOT NULL,
       PRIMARY KEY (id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+  `)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS accord_nx_offer_events (
+      id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+      offer_id VARCHAR(64) NOT NULL DEFAULT '',
+      product_id VARCHAR(64) NOT NULL,
+      product_name VARCHAR(255) NOT NULL DEFAULT '',
+      event_type VARCHAR(32) NOT NULL,
+      path VARCHAR(255) NOT NULL DEFAULT '',
+      visitor_id VARCHAR(64) NOT NULL DEFAULT '',
+      created_at DATETIME NOT NULL,
+      PRIMARY KEY (id),
+      KEY offer_created (offer_id, created_at),
+      KEY product_type_created (product_id, event_type, created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
   `)
 }
@@ -1268,6 +1283,20 @@ async function mysqlUniqueProductValue(column: 'id' | 'slug', base: string) {
   return `${root}-${Date.now().toString(36)}`.slice(0, 64)
 }
 
+export async function mysqlGetCatalogProduct(id: string) {
+  const productId = String(id || '').trim()
+  if (!productId) return null
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const [rows] = await pool.query<CatalogProductRow[]>(
+    `SELECT id, slug, name, product_type, description, details, price, compare_at, manufacturer,
+            category_id, category_name, featured, in_stock, created_on
+     FROM accord_nx_products WHERE id = ? LIMIT 1`,
+    [productId],
+  )
+  return rows[0] ? mapCatalogProductRow(rows[0]) : null
+}
+
 export async function mysqlCreateCatalogProduct(input: {
   name: string
   description?: string
@@ -1596,4 +1625,84 @@ export async function mysqlDeleteEventEngagement(eventId: string) {
   const pool = await getPool()
   await pool.query('DELETE FROM accord_nx_event_likes WHERE event_id = ?', [id])
   await pool.query('DELETE FROM accord_nx_event_comments WHERE event_id = ?', [id])
+}
+
+export async function mysqlRecordOfferEvent(input: {
+  offerId?: string
+  productId: string
+  productName?: string
+  eventType: 'click' | 'whatsapp'
+  path?: string
+  visitorId?: string
+}) {
+  const productId = String(input.productId || '').trim()
+  if (!productId) return
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  await pool.query(
+    `INSERT INTO accord_nx_offer_events
+      (offer_id, product_id, product_name, event_type, path, visitor_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      String(input.offerId || '').trim().slice(0, 64),
+      productId.slice(0, 64),
+      String(input.productName || '').trim().slice(0, 255),
+      input.eventType,
+      String(input.path || '').trim().slice(0, 255),
+      sanitizeVisitorId(input.visitorId),
+      new Date(),
+    ],
+  )
+}
+
+export async function mysqlListOfferEvents(limit = 80): Promise<OfferEvent[]> {
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT id, offer_id, product_id, product_name, event_type, path, visitor_id, created_at
+     FROM accord_nx_offer_events
+     ORDER BY created_at DESC, id DESC
+     LIMIT ${Math.max(1, Math.min(200, Number(limit) || 80))}`,
+  )
+  return rows.map((row) => ({
+    _id: String(row.id),
+    offerId: String(row.offer_id || ''),
+    productId: String(row.product_id || ''),
+    productName: String(row.product_name || ''),
+    eventType: row.event_type === 'whatsapp' ? 'whatsapp' : 'click',
+    path: String(row.path || ''),
+    visitorId: String(row.visitor_id || ''),
+    createdAt: iso(row.created_at),
+  }))
+}
+
+export async function mysqlOfferEventStats() {
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const [totals] = await pool.query<RowDataPacket[]>(
+    `SELECT event_type, COUNT(*) AS total
+     FROM accord_nx_offer_events
+     GROUP BY event_type`,
+  )
+  const [byProduct] = await pool.query<RowDataPacket[]>(
+    `SELECT product_id, MAX(product_name) AS product_name,
+            SUM(event_type = 'click') AS clicks,
+            SUM(event_type = 'whatsapp') AS whatsapp
+     FROM accord_nx_offer_events
+     GROUP BY product_id
+     ORDER BY clicks DESC, whatsapp DESC
+     LIMIT 40`,
+  )
+  const clickTotal = Number(totals.find((row) => row.event_type === 'click')?.total) || 0
+  const whatsappTotal = Number(totals.find((row) => row.event_type === 'whatsapp')?.total) || 0
+  return {
+    clicks: clickTotal,
+    whatsapp: whatsappTotal,
+    products: byProduct.map((row) => ({
+      productId: String(row.product_id || ''),
+      productName: String(row.product_name || row.product_id || ''),
+      clicks: Number(row.clicks) || 0,
+      whatsapp: Number(row.whatsapp) || 0,
+    })),
+  }
 }

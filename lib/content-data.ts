@@ -20,19 +20,28 @@ import { ensureIndexes, getCollection, isMongoConfigured } from '@/lib/mongodb'
 import {
   isMysqlConfigured,
   mysqlAddEventComment,
+  mysqlAddProductImage,
   mysqlCatalogueAnalytics,
   mysqlCreateCatalogue,
+  mysqlCreateCatalogProduct,
   mysqlDeleteCatalogue,
   mysqlDeleteDoc,
   mysqlDeleteEventEngagement,
+  mysqlEnsureCategory,
+  mysqlFileIdFromPublicId,
   mysqlGetCatalogue,
+  mysqlGetCatalogProduct,
   mysqlGetDoc,
+  mysqlGetFile,
   mysqlGetDocByPayloadFrom,
   mysqlGetDocBySlug,
   mysqlGetEventEngagement,
   mysqlInsertDoc,
   mysqlListCatalogues,
   mysqlListDocs,
+  mysqlListOfferEvents,
+  mysqlOfferEventStats,
+  mysqlRecordOfferEvent,
   mysqlDeleteFile,
   mysqlListProfilePages,
   mysqlRecordCatalogueDownload,
@@ -40,7 +49,9 @@ import {
   mysqlToggleEventLike,
   mysqlUniqueSlug,
   mysqlUpdateDoc,
+  mysqlUpsertCatalogProduct,
 } from '@/lib/mysql'
+import { invalidateCatalog } from '@/lib/catalog-data'
 import { renderPdfPages } from '@/lib/pdf-pages'
 
 type WithDates<T> = Omit<T, '_id' | 'createdAt' | 'updatedAt' | 'publishedAt' | 'startDate' | 'endDate' | 'startAt'> & {
@@ -137,10 +148,15 @@ function serializeOffer(doc: WithDates<Offer> & { _id: ObjectId }): Offer {
     title: doc.title,
     description: doc.description || '',
     discountText: doc.discountText || '',
+    kind: doc.kind === 'custom' ? 'custom' : 'products',
     productIds: ids(doc.productIds),
+    price: Number(doc.price) || 0,
+    compareAt: Number(doc.compareAt) || 0,
+    customProductId: doc.customProductId || '',
     startDate: iso(doc.startDate),
     endDate: iso(doc.endDate),
     banner: doc.banner || null,
+    showHeader: Boolean(doc.showHeader),
     published: Boolean(doc.published),
     createdAt: iso(doc.createdAt),
     updatedAt: iso(doc.updatedAt),
@@ -327,7 +343,7 @@ export async function deleteInstallation(id: string): Promise<Installation | nul
 
 export async function listOffers(publishedOnly = false): Promise<Offer[]> {
   if (isMysqlConfigured()) {
-    const offers = await mysqlListDocs<Offer>('offer', publishedOnly)
+    const offers = (await mysqlListDocs<Offer>('offer', publishedOnly)).map((doc) => serializeOffer(doc as WithDates<Offer> & { _id: ObjectId }))
     if (!publishedOnly) return offers
     const now = Date.now()
     return offers.filter((offer) => {
@@ -352,69 +368,139 @@ export async function listOffers(publishedOnly = false): Promise<Offer[]> {
 }
 
 export async function getOfferById(id: string): Promise<Offer | null> {
-  if (isMysqlConfigured()) return mysqlGetDoc<Offer>('offer', id)
+  if (isMysqlConfigured()) {
+    const doc = await mysqlGetDoc<Offer>('offer', id)
+    return doc ? serializeOffer(doc as WithDates<Offer> & { _id: ObjectId }) : null
+  }
   if (!isMongoConfigured() || !ObjectId.isValid(id)) return null
   const collection = await getCollection<WithDates<Offer>>('offers')
   const doc = await collection.findOne({ _id: new ObjectId(id) })
   return doc ? serializeOffer(doc as WithDates<Offer> & { _id: ObjectId }) : null
 }
 
+async function attachOfferBanner(productId: string, banner?: Offer['banner'] | null) {
+  const fileId = banner?.publicId ? mysqlFileIdFromPublicId(banner.publicId) : null
+  if (!fileId) return
+  const file = await mysqlGetFile(String(fileId)).catch(() => null)
+  if (!file?.data?.length) return
+  await mysqlAddProductImage(productId, file.data, file.filename || 'offer.webp', file.mime || 'image/webp')
+}
+
+async function syncCustomOfferProduct(input: {
+  title: string
+  description: string
+  price: number
+  compareAt?: number
+  banner?: Offer['banner']
+  customProductId?: string
+}) {
+  const category = await mysqlEnsureCategory({ name: 'Offers' })
+  const existing = input.customProductId ? await mysqlGetCatalogProduct(input.customProductId) : null
+  if (existing) {
+    await mysqlUpsertCatalogProduct({
+      ...existing,
+      name: input.title,
+      description: input.description,
+      details: input.description || existing.details,
+      price: input.price || existing.price,
+      compareAt: input.compareAt || existing.compareAt,
+      featured: true,
+    })
+    return existing.id
+  }
+  const product = await mysqlCreateCatalogProduct({
+    name: input.title,
+    description: input.description,
+    details: input.description,
+    categoryId: category.slug,
+    categoryName: category.name,
+    price: input.price,
+    featured: true,
+  })
+  await attachOfferBanner(product.id, input.banner)
+  return product.id
+}
+
 export async function createOffer(input: Omit<Offer, '_id' | 'createdAt' | 'updatedAt'>): Promise<Offer> {
-  if (isMysqlConfigured()) {
-    const now = new Date()
-    return mysqlInsertDoc<Offer>('offer', {
+  const kind = input.kind === 'custom' ? 'custom' : 'products'
+  let productIds = ids(input.productIds)
+  let customProductId = input.customProductId || ''
+  if (isMysqlConfigured() && kind === 'custom') {
+    customProductId = await syncCustomOfferProduct({
       title: input.title,
       description: input.description,
-      discountText: input.discountText,
-      productIds: ids(input.productIds),
-      startDate: parseDate(input.startDate, now).toISOString(),
-      endDate: parseDate(input.endDate, new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)).toISOString(),
-      banner: input.banner || null,
-      published: input.published,
+      price: Number(input.price) || 0,
+      compareAt: Number(input.compareAt) || 0,
+      banner: input.banner,
     })
+    productIds = [customProductId]
+    await invalidateCatalog().catch(() => null)
   }
-  await ensureIndexes()
-  const now = new Date()
-  const doc = {
+  const payload = {
     title: input.title,
     description: input.description,
     discountText: input.discountText,
-    productIds: ids(input.productIds),
-    startDate: parseDate(input.startDate, now),
-    endDate: parseDate(input.endDate, new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)),
+    kind,
+    productIds,
+    price: Number(input.price) || 0,
+    compareAt: Number(input.compareAt) || 0,
+    customProductId,
+    startDate: parseDate(input.startDate).toISOString(),
+    endDate: parseDate(input.endDate, new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)).toISOString(),
     banner: input.banner || null,
+    showHeader: Boolean(input.showHeader),
     published: input.published,
-    createdAt: now,
-    updatedAt: now,
   }
+  if (isMysqlConfigured()) {
+    const item = await mysqlInsertDoc<Offer>('offer', payload)
+    await invalidateCatalog().catch(() => null)
+    return item
+  }
+  await ensureIndexes()
+  const now = new Date()
+  const doc = { ...payload, startDate: parseDate(payload.startDate), endDate: parseDate(payload.endDate), createdAt: now, updatedAt: now }
   const collection = await getCollection<WithDates<Offer> & { _id?: ObjectId }>('offers')
   const result = await collection.insertOne(doc as WithDates<Offer>)
   return serializeOffer({ ...doc, _id: result.insertedId } as WithDates<Offer> & { _id: ObjectId })
 }
 
 export async function updateOffer(id: string, input: Partial<Offer>): Promise<Offer | null> {
-  if (isMysqlConfigured()) {
-    const existing = await getOfferById(id)
-    if (!existing) return null
-    return mysqlUpdateDoc<Offer>('offer', id, {
-      ...input,
-      productIds: input.productIds !== undefined ? ids(input.productIds) : existing.productIds,
-      startDate: input.startDate !== undefined ? parseDate(input.startDate).toISOString() : existing.startDate,
-      endDate: input.endDate !== undefined ? parseDate(input.endDate).toISOString() : existing.endDate,
+  const existing = await getOfferById(id)
+  if (!existing) return null
+  const kind = input.kind === 'custom' || existing.kind === 'custom' ? 'custom' : 'products'
+  let productIds = input.productIds !== undefined ? ids(input.productIds) : existing.productIds
+  let customProductId = input.customProductId !== undefined ? input.customProductId : existing.customProductId
+  if (isMysqlConfigured() && kind === 'custom') {
+    customProductId = await syncCustomOfferProduct({
+      title: input.title || existing.title,
+      description: input.description ?? existing.description,
+      price: input.price ?? existing.price,
+      compareAt: input.compareAt ?? existing.compareAt,
+      banner: input.banner !== undefined ? input.banner : existing.banner,
+      customProductId,
     })
+    productIds = [customProductId]
+    await invalidateCatalog().catch(() => null)
+  }
+  const next = {
+    ...input,
+    kind,
+    productIds,
+    customProductId,
+    price: input.price !== undefined ? Number(input.price) || 0 : existing.price,
+    compareAt: input.compareAt !== undefined ? Number(input.compareAt) || 0 : existing.compareAt,
+    startDate: input.startDate !== undefined ? parseDate(input.startDate).toISOString() : existing.startDate,
+    endDate: input.endDate !== undefined ? parseDate(input.endDate).toISOString() : existing.endDate,
+    showHeader: input.showHeader !== undefined ? Boolean(input.showHeader) : existing.showHeader,
+  }
+  if (isMysqlConfigured()) {
+    const item = await mysqlUpdateDoc<Offer>('offer', id, next)
+    await invalidateCatalog().catch(() => null)
+    return item
   }
   if (!ObjectId.isValid(id)) return null
   const collection = await getCollection<WithDates<Offer>>('offers')
-  const $set: Record<string, unknown> = { updatedAt: new Date() }
-  if (input.title !== undefined) $set.title = input.title
-  if (input.description !== undefined) $set.description = input.description
-  if (input.discountText !== undefined) $set.discountText = input.discountText
-  if (input.productIds !== undefined) $set.productIds = ids(input.productIds)
-  if (input.startDate !== undefined) $set.startDate = parseDate(input.startDate)
-  if (input.endDate !== undefined) $set.endDate = parseDate(input.endDate)
-  if (input.banner !== undefined) $set.banner = input.banner
-  if (input.published !== undefined) $set.published = input.published
-  await collection.updateOne({ _id: new ObjectId(id) }, { $set })
+  await collection.updateOne({ _id: new ObjectId(id) }, { $set: { ...next, updatedAt: new Date() } })
   return getOfferById(id)
 }
 
@@ -987,4 +1073,26 @@ export async function replaceCompanyProfileFromPdf(pdf: Buffer, filename: string
     }))
   }
   return pages
+}
+
+export async function recordOfferEvent(input: {
+  offerId?: string
+  productId: string
+  productName?: string
+  eventType: 'click' | 'whatsapp'
+  path?: string
+  visitorId?: string
+}) {
+  if (!isMysqlConfigured()) return
+  await mysqlRecordOfferEvent(input)
+}
+
+export async function listOfferEvents(limit = 80) {
+  if (!isMysqlConfigured()) return []
+  return mysqlListOfferEvents(limit)
+}
+
+export async function getOfferEventStats() {
+  if (!isMysqlConfigured()) return { clicks: 0, whatsapp: 0, products: [] }
+  return mysqlOfferEventStats()
 }

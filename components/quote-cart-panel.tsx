@@ -5,6 +5,7 @@ import { Minus, Plus, Trash2 } from 'lucide-react'
 import { formatKes, productHref } from '@/lib/catalog'
 import { COMPANY } from '@/lib/utils'
 import { useQuoteCart } from '@/components/quote-cart'
+import { trackOfferEvent } from '@/lib/offer-track'
 
 function WhatsAppIcon() {
   return (
@@ -65,7 +66,19 @@ export function QuoteCartPanel() {
         ))}
       </div>
       <div className="quote-side">
-        <a className="wa-button" href={whatsappHref()} target="_blank" rel="noopener noreferrer">
+        <a
+          className="wa-button"
+          href={whatsappHref()}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => {
+            for (const item of items) {
+              if (item.onOffer) {
+                trackOfferEvent({ type: 'whatsapp', productId: item.id, productName: item.name, offerId: item.offerId })
+              }
+            }
+          }}
+        >
           <WhatsAppIcon />
           Ask on WhatsApp
         </a>

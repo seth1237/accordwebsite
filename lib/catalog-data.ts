@@ -11,6 +11,8 @@ import {
   type CatalogProduct,
 } from '@/lib/catalog'
 import { getProductMetricsMap, getProductContentMap, getSiteSettings, type ProductContent } from '@/lib/mongodb'
+import type { Offer } from '@/lib/content'
+import { applyOffersToProducts, isOfferLive } from '@/lib/offers'
 import {
   isMysqlConfigured,
   mysqlCreateCatalogProduct,
@@ -18,6 +20,7 @@ import {
   mysqlEnsureCategory,
   mysqlListCategories,
   mysqlListCatalogProducts,
+  mysqlListDocs,
   mysqlSetLocalCatalogReady,
 } from '@/lib/mysql'
 
@@ -88,13 +91,16 @@ async function loadCatalog(key: string, categoryIds?: string[]): Promise<Catalog
     getProductMetricsMap().catch(() => new Map()),
   ])
 
+  const offers = await mysqlListDocs<Offer>('offer', true).catch(() => [])
+  const liveOffers = offers.filter((offer) => isOfferLive(offer))
   const catalog: Catalog = {
-    products: base.products
-      .map((product) => {
+    products: applyOffersToProducts(
+      base.products.map((product) => {
         const stats = metrics.get(product.id)
         return { ...product, clicks: stats?.clicks || 0, shares: stats?.shares || 0 }
-      })
-      .sort((a, b) => b.clicks - a.clicks || a.name.localeCompare(b.name)),
+      }),
+      liveOffers,
+    ),
     categories: base.categories,
   }
 

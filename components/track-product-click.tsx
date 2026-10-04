@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { trackOfferEvent } from '@/lib/offer-track'
 
 const LAST_KEY = 'tarumed-last-product'
 
@@ -9,11 +10,13 @@ export function TrackProductClick({
   productName,
   categoryId,
   categoryName,
+  offerId,
 }: {
   productId: string
   productName: string
   categoryId: string
   categoryName: string
+  offerId?: string
 }) {
   useEffect(() => {
     const key = `tarumed-click-${productId}`
@@ -38,7 +41,10 @@ export function TrackProductClick({
       }),
       keepalive: true,
     })
-  }, [productId, productName, categoryId, categoryName])
+    if (offerId) {
+      trackOfferEvent({ type: 'click', productId, productName, offerId })
+    }
+  }, [productId, productName, categoryId, categoryName, offerId])
 
   return null
 }

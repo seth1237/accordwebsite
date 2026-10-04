@@ -9,6 +9,8 @@ import { ProductShare } from '@/components/product-share'
 import { ViewCatalogueButton } from '@/components/view-catalogue-button'
 import { useQuoteCart } from '@/components/quote-cart'
 import { productHref, type CatalogProduct } from '@/lib/catalog'
+import { offerWhatsAppText } from '@/lib/offers'
+import { trackOfferEvent } from '@/lib/offer-track'
 
 function WhatsAppIcon() {
   return (
@@ -24,7 +26,9 @@ function productPageUrl(product: { slug: string; id?: string }) {
 }
 
 function whatsappHref(product: CatalogProduct) {
-  const text = `Hello Accord, I would like a quote for ${product.name}.\n${productPageUrl(product)}`
+  const text = product.onOffer
+    ? offerWhatsAppText(product.name, productPageUrl(product), product.price)
+    : `Hello Accord, I would like a quote for ${product.name}.\n${productPageUrl(product)}`
   return `https://wa.me/${COMPANY.whatsapp}?text=${encodeURIComponent(text)}`
 }
 
@@ -73,7 +77,17 @@ export function QuoteForm({
         <button type="button" className="text-link" onClick={() => add(product, quantity)}>
           {inCart ? 'Added to quote cart' : 'Add to quote cart'}
         </button>
-        <a className="wa-button" href={whatsappHref(product)} target="_blank" rel="noopener noreferrer">
+        <a
+          className="wa-button"
+          href={whatsappHref(product)}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => {
+            if (product.onOffer) {
+              trackOfferEvent({ type: 'whatsapp', productId: product.id, productName: product.name, offerId: product.offerId })
+            }
+          }}
+        >
           <WhatsAppIcon />
           WhatsApp
         </a>

@@ -11,6 +11,7 @@ type Bootstrap = {
   showPrices: boolean
   jobCount: number
   offer: Offer | null
+  headerOffers: Offer[]
 }
 
 const emptyCatalog: Catalog = { products: [], categories: [] }
@@ -20,6 +21,7 @@ const emptyBootstrap: Bootstrap = {
   showPrices: true,
   jobCount: 0,
   offer: null,
+  headerOffers: [],
 }
 
 function isRetryableFetchError(error: unknown) {
@@ -91,6 +93,7 @@ export const getSiteBootstrap = cache(async (): Promise<Bootstrap> => {
       showPrices: payload.showPrices !== false,
       jobCount: Number(payload.jobCount) || 0,
       offer: payload.offer || null,
+      headerOffers: Array.isArray(payload.headerOffers) ? payload.headerOffers : [],
     } : emptyBootstrap
     if (payload?.catalog?.products?.length) globalForSite.__accordBootstrap = { at: Date.now(), data }
     return data
@@ -145,6 +148,18 @@ export async function listOffers(publishedOnly = true): Promise<Offer[]> {
   const path = publishedOnly ? '/api/offers' : '/api/admin/offers'
   const payload = await backendJson<{ data: Offer[] }>(path)
   return payload?.data || []
+}
+
+export async function getOfferAnalytics() {
+  const payload = await backendJson<{
+    data: {
+      clicks: number
+      whatsapp: number
+      products: Array<{ productId: string; productName: string; clicks: number; whatsapp: number }>
+      events: import('@/lib/content').OfferEvent[]
+    }
+  }>('/api/admin/offers/stats')
+  return payload?.data || { clicks: 0, whatsapp: 0, products: [], events: [] }
 }
 
 export async function listEvents(publishedOnly = true): Promise<EventPost[]> {

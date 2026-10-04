@@ -29,6 +29,9 @@ import {
   getEventById,
   getEventBySlug,
   getEventEngagement,
+  getOfferEventStats,
+  listOfferEvents,
+  recordOfferEvent,
   addEventComment,
   toggleEventLike,
   getInstallationById,
@@ -182,6 +185,7 @@ async function loadBootstrap() {
     showPrices: showPrices !== false,
     jobCount: jobs.length,
     offer: offers[0] || null,
+    headerOffers: offers.filter((offer) => offer.showHeader),
   }
 }
 
@@ -389,6 +393,30 @@ app.post('/api/products/click', async (c) => {
     return c.json({ success: true })
   } catch (error) {
     return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not record click' }, 500)
+  }
+})
+
+app.post('/api/offers/event', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}))
+    const eventType = textValue(body.type || body.eventType, 20)
+    if (eventType !== 'click' && eventType !== 'whatsapp') {
+      return c.json({ success: false, message: 'type must be click or whatsapp' }, 400)
+    }
+    const productId = textValue(body.productId, 80)
+    if (!productId) return c.json({ success: false, message: 'productId is required' }, 400)
+    await recordOfferEvent({
+      offerId: textValue(body.offerId, 64),
+      productId,
+      productName: textValue(body.productName, 200),
+      eventType,
+      path: textValue(body.path, 255),
+      visitorId: textValue(body.visitorId, 64),
+    })
+    return c.json({ success: true })
+  } catch (error) {
+    if (isMysqlConnectError(error)) return c.json({ success: true })
+    return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not record offer event' }, 500)
   }
 })
 
@@ -906,12 +934,18 @@ app.post('/api/admin/offers', async (c) => {
     title,
     description: formText(form, 'description'),
     discountText: formText(form, 'discountText'),
+    kind: formText(form, 'kind') === 'custom' ? 'custom' : 'products',
     productIds: csvIds(formText(form, 'productIds')),
+    price: Number(formText(form, 'price')) || 0,
+    compareAt: Number(formText(form, 'compareAt')) || 0,
+    customProductId: '',
     startDate: formText(form, 'startDate') || new Date().toISOString(),
     endDate: formText(form, 'endDate') || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
     banner,
+    showHeader: formChecked(form, 'showHeader'),
     published: formChecked(form, 'published'),
   })
+  invalidatePublicCatalog()
   return c.json({ success: true, data: item })
 })
 
@@ -930,12 +964,17 @@ app.patch('/api/admin/offers/:id', async (c) => {
     title,
     description: formText(form, 'description'),
     discountText: formText(form, 'discountText'),
+    kind: formText(form, 'kind') === 'custom' ? 'custom' : existing.kind || 'products',
     productIds: csvIds(formText(form, 'productIds')),
+    price: Number(formText(form, 'price') || existing.price) || 0,
+    compareAt: Number(formText(form, 'compareAt') || existing.compareAt) || 0,
     startDate: formText(form, 'startDate') || existing.startDate,
     endDate: formText(form, 'endDate') || existing.endDate,
     banner,
+    showHeader: form.has('showHeader') ? formChecked(form, 'showHeader') : existing.showHeader,
     published: formChecked(form, 'published'),
   })
+  invalidatePublicCatalog()
   return c.json({ success: true, data: item })
 })
 
@@ -944,7 +983,20 @@ app.delete('/api/admin/offers/:id', async (c) => {
   if (auth.error) return c.json(auth.error, auth.status)
   const removed = await deleteOffer(c.req.param('id'))
   if (!removed) return c.json({ success: false, message: 'Offer not found' }, 404)
+  invalidatePublicCatalog()
   return c.json({ success: true })
+})
+
+app.get('/api/admin/offers/stats', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  try {
+    const [stats, events] = await Promise.all([getOfferEventStats(), listOfferEvents(80)])
+    return c.json({ success: true, data: { ...stats, events } })
+  } catch (error) {
+    if (isMysqlConnectError(error)) return c.json({ success: true, data: { clicks: 0, whatsapp: 0, products: [], events: [] } })
+    return c.json({ success: false, message: databaseErrorMessage(error) }, 503)
+  }
 })
 
 app.post('/api/admin/media', async (c) => {
