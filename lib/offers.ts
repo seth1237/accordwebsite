@@ -77,5 +77,12 @@ export function applyOffersToProducts(products: CatalogProduct[], offers: Offer[
 
 export function offerWhatsAppText(name: string, url: string, price?: number) {
   const cash = price && price > 0 ? ` Cash price: KES ${price.toLocaleString('en-KE')}.` : ''
-  return `Hello Accord, I want the offer on ${name}.${cash}\n${url}`
+  return `OFFER PRODUCTS\n\nHello Accord, I want the offer on ${name}.${cash}\n${url}`
+}
+
+export function quoteCartWhatsAppText(items: Array<{ name: string; quantity: number; href: string; onOffer?: boolean }>) {
+  const hasOffer = items.some((item) => item.onOffer)
+  const lines = items.map((item) => `- ${item.quantity} × ${item.name}${item.onOffer ? ' [OFFER PRODUCTS]' : ''}\n  ${item.href}`)
+  const head = hasOffer ? 'OFFER PRODUCTS\n\n' : ''
+  return `${head}Hello Accord, I would like a quote for:\n${lines.join('\n')}`
 }

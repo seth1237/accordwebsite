@@ -6,6 +6,7 @@ import { formatKes, productHref } from '@/lib/catalog'
 import { COMPANY } from '@/lib/utils'
 import { useQuoteCart } from '@/components/quote-cart'
 import { trackOfferEvent } from '@/lib/offer-track'
+import { quoteCartWhatsAppText } from '@/lib/offers'
 
 function WhatsAppIcon() {
   return (
@@ -19,8 +20,13 @@ export function QuoteCartPanel() {
   const { items, setQuantity, remove } = useQuoteCart()
 
   const whatsappHref = () => {
-    const lines = items.map((item) => `- ${item.quantity} × ${item.name}\n  ${typeof window !== 'undefined' ? window.location.origin : COMPANY.url}${productHref(item)}`)
-    const text = `Hello Accord, I would like a quote for:\n${lines.join('\n')}`
+    const origin = typeof window !== 'undefined' ? window.location.origin : COMPANY.url
+    const text = quoteCartWhatsAppText(items.map((item) => ({
+      name: item.name,
+      quantity: item.quantity,
+      href: `${origin}${productHref(item)}`,
+      onOffer: item.onOffer,
+    })))
     return `https://wa.me/${COMPANY.whatsapp}?text=${encodeURIComponent(text)}`
   }
 
