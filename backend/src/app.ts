@@ -7,6 +7,7 @@ import { ADMIN_COOKIE, adminCookieOptions, authenticateAdmin, createAdminSession
 import { slugifyName } from '../../lib/catalog'
 import { createCatalogCategory, createCatalogProduct, getCatalog, getCatalogProduct, getPriceVisibility } from '../../lib/catalog-data'
 import { csvIds } from '../../lib/content'
+import { parseOfferProductPrices } from '../../lib/offers'
 import { excerptFromBody, parseEventBody } from '../../lib/event-body'
 import { prepareStoredImage } from '../../lib/image-convert'
 import {
@@ -936,6 +937,7 @@ app.post('/api/admin/offers', async (c) => {
     discountText: formText(form, 'discountText'),
     kind: formText(form, 'kind') === 'custom' ? 'custom' : 'products',
     productIds: csvIds(formText(form, 'productIds')),
+    productPrices: parseOfferProductPrices(formText(form, 'productPrices')),
     price: Number(formText(form, 'price')) || 0,
     compareAt: Number(formText(form, 'compareAt')) || 0,
     customProductId: '',
@@ -943,6 +945,8 @@ app.post('/api/admin/offers', async (c) => {
     endDate: formText(form, 'endDate') || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
     banner,
     showHeader: formChecked(form, 'showHeader'),
+    headerTagline: formText(form, 'headerTagline'),
+    headerCta: formText(form, 'headerCta'),
     published: formChecked(form, 'published'),
   })
   invalidatePublicCatalog()
@@ -966,12 +970,15 @@ app.patch('/api/admin/offers/:id', async (c) => {
     discountText: formText(form, 'discountText'),
     kind: formText(form, 'kind') === 'custom' ? 'custom' : existing.kind || 'products',
     productIds: csvIds(formText(form, 'productIds')),
+    productPrices: parseOfferProductPrices(formText(form, 'productPrices')),
     price: Number(formText(form, 'price') || existing.price) || 0,
     compareAt: Number(formText(form, 'compareAt') || existing.compareAt) || 0,
     startDate: formText(form, 'startDate') || existing.startDate,
     endDate: formText(form, 'endDate') || existing.endDate,
     banner,
     showHeader: form.has('showHeader') ? formChecked(form, 'showHeader') : existing.showHeader,
+    headerTagline: form.has('headerTagline') ? formText(form, 'headerTagline') : existing.headerTagline,
+    headerCta: form.has('headerCta') ? formText(form, 'headerCta') : existing.headerCta,
     published: formChecked(form, 'published'),
   })
   invalidatePublicCatalog()

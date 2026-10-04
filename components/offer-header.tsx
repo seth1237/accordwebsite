@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { PLACEHOLDER_IMAGE, formatKes, productHref, type CatalogProduct } from '@/lib/catalog'
+import { DEFAULT_OFFER_HEADER_CTA } from '@/lib/offers'
 import { ROUTES } from '@/lib/routes'
 
 export type OfferHeaderProduct = Pick<CatalogProduct, 'id' | 'name' | 'slug' | 'image' | 'price' | 'offerId'>
@@ -49,19 +50,24 @@ function OfferChipFace({ product, showPrice }: { product: OfferHeaderProduct; sh
 export function OfferHeader({
   title,
   discountText,
+  tagline,
+  ctaLabel,
   endsAt,
   products,
   showPrices = true,
 }: {
   title: string
   discountText?: string
+  tagline?: string
+  ctaLabel?: string
   endsAt?: string
   products: OfferHeaderProduct[]
   showPrices?: boolean
 }) {
   const items = looped(products)
   const until = endsLabel(endsAt)
-  const line = discountText || title
+  const line = tagline || discountText || title
+  const cta = ctaLabel || DEFAULT_OFFER_HEADER_CTA
   const duration = Math.max(18, items.length * 3.2)
 
   return (
@@ -88,7 +94,7 @@ export function OfferHeader({
             </div>
           </div>
         )}
-        <Link href={ROUTES.offers} className="offer-header-cta">Shop offer</Link>
+        <Link href={ROUTES.offers} className="offer-header-cta">{cta}</Link>
       </div>
     </div>
   )

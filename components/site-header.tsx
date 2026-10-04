@@ -28,6 +28,8 @@ export async function SiteHeader() {
         <OfferHeader
           title={header.offer.title}
           discountText={header.offer.discountText}
+          tagline={header.offer.headerTagline}
+          ctaLabel={header.offer.headerCta}
           endsAt={header.offer.endDate}
           products={header.products}
           showPrices={bootstrap?.showPrices !== false}

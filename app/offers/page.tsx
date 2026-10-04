@@ -6,6 +6,7 @@ import { OfferActions } from '@/components/offer-actions'
 import { pageMetadata } from '@/lib/seo'
 import { ROUTES } from '@/lib/routes'
 import { formatKes, productHref } from '@/lib/catalog'
+import { offerPriceForProduct } from '@/lib/offers'
 import { getCatalog, listOffers } from '@/lib/site-data'
 
 export const dynamic = 'force-dynamic'
@@ -41,16 +42,25 @@ export default async function OffersPage() {
                   <span>Until {new Date(item.endDate).toLocaleDateString('en-KE')}</span>
                 </div>
                 <h3>{item.title}</h3>
-                {item.price > 0 && <p className="offer-cash">{formatKes(item.price)}</p>}
+                {item.kind === 'custom' && item.price > 0 && <p className="offer-cash">{formatKes(item.price)}</p>}
                 {item.description ? <p>{item.description}</p> : null}
                 {linked.length > 0 && (
                   <ul className="offer-products">
-                    {linked.map((product) => (
-                      <li key={product.id}>
-                        <Link href={productHref(product)}>{product.name}</Link>
-                        {product.price > 0 ? <span>{formatKes(product.price)}</span> : null}
-                      </li>
-                    ))}
+                    {linked.map((product) => {
+                      const deal = offerPriceForProduct(item, product.id)
+                      const cash = deal.price || product.price
+                      return (
+                        <li key={product.id}>
+                          <Link href={productHref(product)}>{product.name}</Link>
+                          {cash > 0 ? (
+                            <span>
+                              {deal.compareAt > cash ? <s>{formatKes(deal.compareAt)}</s> : null}
+                              {formatKes(cash)}
+                            </span>
+                          ) : null}
+                        </li>
+                      )
+                    })}
                   </ul>
                 )}
                 <OfferActions offer={item} products={linked} />

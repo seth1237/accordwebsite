@@ -23,7 +23,8 @@ export const metadata: Metadata = pageMetadata({
 export default async function Page() {
   const [catalog, showPrices] = await Promise.all([getCatalog(), getPriceVisibility()])
   const onOffer = catalog.products.filter((product) => product.onOffer)
-  const featured = homepageProducts(catalog.products.filter((product) => !product.onOffer), Math.max(0, 12 - onOffer.length))
+  const others = catalog.products.filter((product) => !product.onOffer)
+  const featured = homepageProducts(others, onOffer.length ? 12 : Math.max(0, 12 - onOffer.length))
 
   return (
     <main className="min-h-screen">
@@ -50,8 +51,14 @@ export default async function Page() {
         <section id="products" className="catalog-section">
           <div className="section-heading">
             <div>
-              <span className="kicker">Featured equipment</span>
-              <h2>Selected products</h2>
+              {onOffer.length > 0 ? (
+                <h2>Other products</h2>
+              ) : (
+                <>
+                  <span className="kicker">Featured equipment</span>
+                  <h2>Selected products</h2>
+                </>
+              )}
             </div>
             <Link href="/products" className="text-link">View all products</Link>
           </div>

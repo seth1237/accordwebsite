@@ -1,5 +1,37 @@
 import type { CatalogProduct } from '@/lib/catalog'
-import type { Offer } from '@/lib/content'
+import type { Offer, OfferProductPrice } from '@/lib/content'
+
+export const DEFAULT_OFFER_HEADER_TAGLINE = 'Happy Customer Service Week — we have customized offers just for you'
+export const DEFAULT_OFFER_HEADER_CTA = 'Check out!'
+
+export function parseOfferProductPrices(value: unknown): OfferProductPrice[] {
+  let raw = value
+  if (typeof raw === 'string') {
+    try { raw = JSON.parse(raw) } catch { return [] }
+  }
+  if (Array.isArray(raw)) {
+    return raw.map((row) => ({
+      productId: String((row as OfferProductPrice)?.productId || (row as { id?: string })?.id || ''),
+      price: Number((row as OfferProductPrice)?.price) || 0,
+      compareAt: Number((row as OfferProductPrice)?.compareAt) || 0,
+    })).filter((row) => row.productId)
+  }
+  if (raw && typeof raw === 'object') {
+    return Object.entries(raw as Record<string, { price?: number; compareAt?: number } | number>).map(([productId, row]) => ({
+      productId,
+      price: Number(typeof row === 'number' ? row : row?.price) || 0,
+      compareAt: Number(typeof row === 'number' ? 0 : row?.compareAt) || 0,
+    })).filter((row) => row.productId)
+  }
+  return []
+}
+
+export function offerPriceForProduct(offer: Offer, productId?: string) {
+  const row = productId ? (offer.productPrices || []).find((item) => item.productId === productId) : undefined
+  const price = Number(row?.price) || Number(offer.price) || 0
+  const compareAt = Number(row?.compareAt) || Number(offer.compareAt) || 0
+  return { price, compareAt }
+}
 
 export function isOfferLive(offer: Offer, now = Date.now()) {
   if (!offer.published) return false
@@ -30,8 +62,8 @@ export function applyOffersToProducts(products: CatalogProduct[], offers: Offer[
   return products.map((product) => {
     const offer = live.find((item) => (item.productIds || []).includes(product.id) || item.customProductId === product.id)
     if (!offer) return product
-    const cash = Number(offer.price) || 0
-    const was = Number(offer.compareAt) || product.price
+    const { price: cash, compareAt: overrideWas } = offerPriceForProduct(offer, product.id)
+    const was = overrideWas || product.price
     return {
       ...product,
       onOffer: true,

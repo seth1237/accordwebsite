@@ -15,6 +15,7 @@ import type {
 import { normalizePath } from '@/lib/content'
 import { isCloudinaryConfigured, uploadSiteImage } from '@/lib/cloudinary'
 import { excerptFromBody, parseEventBody } from '@/lib/event-body'
+import { parseOfferProductPrices } from '@/lib/offers'
 import { prepareStoredImage } from '@/lib/image-convert'
 import { ensureIndexes, getCollection, isMongoConfigured } from '@/lib/mongodb'
 import {
@@ -150,6 +151,7 @@ function serializeOffer(doc: WithDates<Offer> & { _id: ObjectId }): Offer {
     discountText: doc.discountText || '',
     kind: doc.kind === 'custom' ? 'custom' : 'products',
     productIds: ids(doc.productIds),
+    productPrices: parseOfferProductPrices((doc as Offer & { productPrices?: unknown }).productPrices),
     price: Number(doc.price) || 0,
     compareAt: Number(doc.compareAt) || 0,
     customProductId: doc.customProductId || '',
@@ -157,6 +159,8 @@ function serializeOffer(doc: WithDates<Offer> & { _id: ObjectId }): Offer {
     endDate: iso(doc.endDate),
     banner: doc.banner || null,
     showHeader: Boolean(doc.showHeader),
+    headerTagline: doc.headerTagline || '',
+    headerCta: doc.headerCta || '',
     published: Boolean(doc.published),
     createdAt: iso(doc.createdAt),
     updatedAt: iso(doc.updatedAt),
@@ -442,6 +446,7 @@ export async function createOffer(input: Omit<Offer, '_id' | 'createdAt' | 'upda
     discountText: input.discountText,
     kind,
     productIds,
+    productPrices: parseOfferProductPrices(input.productPrices),
     price: Number(input.price) || 0,
     compareAt: Number(input.compareAt) || 0,
     customProductId,
@@ -449,6 +454,8 @@ export async function createOffer(input: Omit<Offer, '_id' | 'createdAt' | 'upda
     endDate: parseDate(input.endDate, new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)).toISOString(),
     banner: input.banner || null,
     showHeader: Boolean(input.showHeader),
+    headerTagline: input.headerTagline || '',
+    headerCta: input.headerCta || '',
     published: input.published,
   }
   if (isMysqlConfigured()) {
@@ -489,9 +496,12 @@ export async function updateOffer(id: string, input: Partial<Offer>): Promise<Of
     customProductId,
     price: input.price !== undefined ? Number(input.price) || 0 : existing.price,
     compareAt: input.compareAt !== undefined ? Number(input.compareAt) || 0 : existing.compareAt,
+    productPrices: input.productPrices !== undefined ? parseOfferProductPrices(input.productPrices) : existing.productPrices,
     startDate: input.startDate !== undefined ? parseDate(input.startDate).toISOString() : existing.startDate,
     endDate: input.endDate !== undefined ? parseDate(input.endDate).toISOString() : existing.endDate,
     showHeader: input.showHeader !== undefined ? Boolean(input.showHeader) : existing.showHeader,
+    headerTagline: input.headerTagline !== undefined ? input.headerTagline : existing.headerTagline,
+    headerCta: input.headerCta !== undefined ? input.headerCta : existing.headerCta,
   }
   if (isMysqlConfigured()) {
     const item = await mysqlUpdateDoc<Offer>('offer', id, next)

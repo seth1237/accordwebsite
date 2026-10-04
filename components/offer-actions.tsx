@@ -4,7 +4,7 @@ import Link from 'next/link'
 import type { CatalogProduct } from '@/lib/catalog'
 import { productHref } from '@/lib/catalog'
 import type { Offer } from '@/lib/content'
-import { offerWhatsAppText } from '@/lib/offers'
+import { offerPriceForProduct, offerWhatsAppText } from '@/lib/offers'
 import { trackOfferEvent } from '@/lib/offer-track'
 import { COMPANY } from '@/lib/utils'
 
@@ -12,7 +12,8 @@ export function OfferActions({ offer, products }: { offer: Offer; products: Cata
   const lead = products[0]
   const href = lead ? productHref(lead) : '/products'
   const pageUrl = `${typeof window !== 'undefined' ? window.location.origin : COMPANY.url}${href}`
-  const wa = `https://wa.me/${COMPANY.whatsapp}?text=${encodeURIComponent(offerWhatsAppText(offer.title, pageUrl, offer.price || lead?.price))}`
+  const leadPrice = offerPriceForProduct(offer, lead?.id).price || lead?.price
+  const wa = `https://wa.me/${COMPANY.whatsapp}?text=${encodeURIComponent(offerWhatsAppText(offer.title, pageUrl, leadPrice))}`
 
   function markClick() {
     if (!lead) return

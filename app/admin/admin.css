@@ -153,6 +153,14 @@
 .admin-job-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .offer-picker { display: grid; gap: 10px; }
 .offer-picked { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+.offer-price-rows { display: grid; gap: 10px; }
+.offer-price-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) 120px 120px;
+  gap: 8px;
+  align-items: end;
+}
+.offer-price-row .chip { justify-self: start; }
 .offer-pick-row { justify-content: flex-start; }
 .offer-history { width: 100%; border-collapse: collapse; font-size: 13px; }
 .offer-history th, .offer-history td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #e4eeec; }
@@ -331,6 +339,7 @@
   .admin-stats { grid-template-columns: 1fr 1fr; }
   .admin-product { grid-template-columns: 64px 1fr auto; }
   .admin-job-row { grid-template-columns: 1fr; }
+  .offer-price-row { grid-template-columns: 1fr; }
   .admin-submission-grid { grid-template-columns: 1fr; }
 }
 

@@ -22,6 +22,12 @@ export type Installation = {
   updatedAt: string
 }
 
+export type OfferProductPrice = {
+  productId: string
+  price: number
+  compareAt: number
+}
+
 export type Offer = {
   _id: string
   title: string
@@ -29,6 +35,7 @@ export type Offer = {
   discountText: string
   kind: 'products' | 'custom'
   productIds: string[]
+  productPrices: OfferProductPrice[]
   price: number
   compareAt: number
   customProductId: string
@@ -36,6 +43,8 @@ export type Offer = {
   endDate: string
   banner: MediaAsset | null
   showHeader: boolean
+  headerTagline: string
+  headerCta: string
   published: boolean
   createdAt: string
   updatedAt: string
