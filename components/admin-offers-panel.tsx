@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import type { CatalogProduct } from '@/lib/catalog'
 import { formatKes } from '@/lib/catalog'
 import type { Offer, OfferEvent } from '@/lib/content'
+import { AdminSeoPanel } from '@/components/admin-seo-panel'
 import { DEFAULT_OFFER_HEADER_CTA, DEFAULT_OFFER_HEADER_TAGLINE } from '@/lib/offers'
 
 function todayInput() {
@@ -40,7 +41,9 @@ export function AdminOffersPanel({
   const [kind, setKind] = useState<'products' | 'custom'>('products')
   const [query, setQuery] = useState('')
   const [picked, setPicked] = useState<string[]>([])
-  const [prices, setPrices] = useState<Record<string, { price: string; compareAt: string }>>({})
+  const [prices, setPrices] = useState<Record<string, { price: string; compareAt: string; showPrice: boolean }>>({})
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
   const [message, setMessage] = useState('')
   const [saving, setSaving] = useState(false)
   const selected = useMemo(() => offers.find((item) => item._id === selectedId) || null, [offers, selectedId])
@@ -57,9 +60,15 @@ export function AdminOffersPanel({
     setSelectedId(id)
     setKind(item?.kind === 'custom' ? 'custom' : 'products')
     setPicked(item?.productIds || [])
+    setTitle(item?.title || '')
+    setDescription(item?.description || '')
     setPrices(Object.fromEntries((item?.productPrices || []).map((row) => [
       row.productId,
-      { price: row.price ? String(row.price) : '', compareAt: row.compareAt ? String(row.compareAt) : '' },
+      {
+        price: row.price ? String(row.price) : '',
+        compareAt: row.compareAt ? String(row.compareAt) : '',
+        showPrice: row.showPrice !== false,
+      },
     ])))
     setQuery('')
     setMessage('')
@@ -67,11 +76,15 @@ export function AdminOffersPanel({
 
   function toggleProduct(id: string) {
     setPicked((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]))
-    setPrices((current) => current[id] ? current : { ...current, [id]: { price: '', compareAt: '' } })
+    setPrices((current) => current[id] ? current : { ...current, [id]: { price: '', compareAt: '', showPrice: true } })
   }
 
   function setProductPrice(id: string, field: 'price' | 'compareAt', value: string) {
-    setPrices((current) => ({ ...current, [id]: { price: '', compareAt: '', ...current[id], [field]: value } }))
+    setPrices((current) => ({ ...current, [id]: { price: '', compareAt: '', showPrice: true, ...current[id], [field]: value } }))
+  }
+
+  function setProductShowPrice(id: string, showPrice: boolean) {
+    setPrices((current) => ({ ...current, [id]: { price: '', compareAt: '', showPrice: true, ...current[id], showPrice } }))
   }
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -81,11 +94,13 @@ export function AdminOffersPanel({
     data.set('kind', kind)
     data.set('published', data.get('published') ? 'true' : 'false')
     data.set('showHeader', data.get('showHeader') ? 'true' : 'false')
+    data.set('showPrice', kind === 'custom' && data.get('showPrice') ? 'true' : kind === 'custom' ? 'false' : 'true')
     data.set('productIds', kind === 'custom' ? '' : picked.join(','))
     data.set('productPrices', JSON.stringify(kind === 'custom' ? [] : picked.map((id) => ({
       productId: id,
       price: Number(prices[id]?.price) || 0,
       compareAt: Number(prices[id]?.compareAt) || 0,
+      showPrice: prices[id]?.showPrice !== false,
     }))))
     setSaving(true)
     setMessage('')
@@ -181,14 +196,20 @@ export function AdminOffersPanel({
               Create as a new product
             </label>
           </div>
-          <label>Title<input name="title" required defaultValue={selected?.title || ''} /></label>
+          <label>Title<input name="title" required value={title} onChange={(event) => setTitle(event.target.value)} /></label>
           <label>Short offer line<input name="discountText" defaultValue={selected?.discountText || ''} placeholder="20% off, this week only" /></label>
-          <label>Description<textarea name="description" rows={5} defaultValue={selected?.description || ''} placeholder="What is included and who it is for" /></label>
+          <label>Description<textarea name="description" rows={5} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="What is included and who it is for" /></label>
           {kind === 'custom' && (
-            <div className="admin-job-row">
-              <label>Cash price (KES)<input name="price" type="number" min="0" step="1" defaultValue={selected?.price || ''} /></label>
-              <label>Was (KES)<input name="compareAt" type="number" min="0" step="1" defaultValue={selected?.compareAt || ''} /></label>
-            </div>
+            <>
+              <div className="admin-job-row">
+                <label>Cash price (KES)<input name="price" type="number" min="0" step="1" defaultValue={selected?.price || ''} /></label>
+                <label>Was (KES)<input name="compareAt" type="number" min="0" step="1" defaultValue={selected?.compareAt || ''} /></label>
+              </div>
+              <label className="admin-check">
+                <input type="checkbox" name="showPrice" defaultChecked={selected ? selected.showPrice !== false : true} />
+                Show price on the product card
+              </label>
+            </>
           )}
           <div className="admin-job-row">
             <label>Start date<input name="startDate" type="date" required defaultValue={selected?.startDate?.slice(0, 10) || todayInput()} /></label>
@@ -248,6 +269,14 @@ export function AdminOffersPanel({
                             placeholder="0"
                           />
                         </label>
+                        <label className="admin-check">
+                          <input
+                            type="checkbox"
+                            checked={prices[id]?.showPrice !== false}
+                            onChange={(event) => setProductShowPrice(id, event.target.checked)}
+                          />
+                          Show price on card
+                        </label>
                       </div>
                     )
                   })}
@@ -271,6 +300,14 @@ export function AdminOffersPanel({
               <label className="admin-check"><input type="checkbox" name="removeImage" value="true" /> Remove current image</label>
             </div>
           )}
+          <AdminSeoPanel
+            sourceName={title}
+            sourceDescription={description}
+            hasImage={Boolean(selected?.banner?.secureUrl)}
+            hasInternalLinks={kind === 'custom' || picked.length > 0}
+            defaults={selected?.seo}
+            pathPrefix="/offers/"
+          />
           <label className="admin-check">
             <input type="checkbox" name="published" defaultChecked={selected ? selected.published : true} /> Published
           </label>

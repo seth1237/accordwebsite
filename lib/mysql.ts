@@ -33,7 +33,7 @@ type SiteSettings = {
   updatedAt: Date
 }
 
-const MYSQL_SCHEMA_VERSION = 7
+const MYSQL_SCHEMA_VERSION = 8
 
 type MysqlState = {
   pool: Pool | null
@@ -355,6 +355,7 @@ async function applyMysqlSchema() {
   }
   await mysqlAddColumnIfMissing('accord_nx_files', 'source_url', `source_url VARCHAR(512) NOT NULL DEFAULT ''`)
   await mysqlAddColumnIfMissing('accord_nx_site_settings', 'use_local_catalog', `use_local_catalog TINYINT(1) NOT NULL DEFAULT 0`)
+  await mysqlAddColumnIfMissing('accord_nx_products', 'seo', `seo LONGTEXT NULL`)
   await pool.query(`
     CREATE TABLE IF NOT EXISTS accord_nx_site_visits (
       visit_date DATE NOT NULL,
@@ -1103,6 +1104,7 @@ type CatalogProductRow = RowDataPacket & {
   featured: number
   in_stock: number
   created_on: string
+  seo?: string | null
 }
 
 function mapCatalogProductRow(row: CatalogProductRow): CatalogProduct {
@@ -1131,6 +1133,24 @@ function mapCatalogProductRow(row: CatalogProductRow): CatalogProduct {
     productType: row.product_type || null,
     featured: Boolean(row.featured),
     createdOn: row.created_on || undefined,
+    seo: row.seo ? parseSeoJson(row.seo) : undefined,
+  }
+}
+
+function parseSeoJson(value: string) {
+  try {
+    const parsed = JSON.parse(value)
+    if (!parsed || typeof parsed !== 'object') return undefined
+    return {
+      focusKeyword: String(parsed.focusKeyword || ''),
+      seoTitle: String(parsed.seoTitle || ''),
+      seoDescription: String(parsed.seoDescription || ''),
+      seoSlug: String(parsed.seoSlug || ''),
+      seoKeywords: String(parsed.seoKeywords || ''),
+      imageAlt: String(parsed.imageAlt || ''),
+    }
+  } catch {
+    return undefined
   }
 }
 
@@ -1164,8 +1184,8 @@ export async function mysqlUpsertCatalogProduct(product: CatalogProduct) {
   const now = new Date()
   await pool.query(
     `INSERT INTO accord_nx_products
-      (id, slug, name, product_type, description, details, price, compare_at, manufacturer, category_id, category_name, featured, in_stock, created_on, imported_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, slug, name, product_type, description, details, price, compare_at, manufacturer, category_id, category_name, featured, in_stock, created_on, imported_at, updated_at, seo)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
       slug = VALUES(slug),
       name = VALUES(name),
@@ -1180,6 +1200,7 @@ export async function mysqlUpsertCatalogProduct(product: CatalogProduct) {
       featured = VALUES(featured),
       in_stock = VALUES(in_stock),
       created_on = VALUES(created_on),
+      seo = VALUES(seo),
       updated_at = VALUES(updated_at)`,
     [
       product.id,
@@ -1198,6 +1219,7 @@ export async function mysqlUpsertCatalogProduct(product: CatalogProduct) {
       product.createdOn || '',
       now,
       now,
+      product.seo ? JSON.stringify(product.seo) : null,
     ],
   )
 }
@@ -1290,7 +1312,7 @@ export async function mysqlGetCatalogProduct(id: string) {
   const pool = await getPool()
   const [rows] = await pool.query<CatalogProductRow[]>(
     `SELECT id, slug, name, product_type, description, details, price, compare_at, manufacturer,
-            category_id, category_name, featured, in_stock, created_on
+            category_id, category_name, featured, in_stock, created_on, seo
      FROM accord_nx_products WHERE id = ? LIMIT 1`,
     [productId],
   )
@@ -1307,10 +1329,12 @@ export async function mysqlCreateCatalogProduct(input: {
   price?: number
   inStock?: boolean
   featured?: boolean
+  seo?: CatalogProduct['seo']
+  slug?: string
 }) {
   const name = String(input.name || '').trim()
   if (!name) throw new Error('Enter a product name')
-  const slugBase = slugifyName(name) || 'product'
+  const slugBase = slugifyName(input.slug || input.seo?.seoSlug || name) || 'product'
   const slug = await mysqlUniqueProductValue('slug', slugBase)
   const id = await mysqlUniqueProductValue('id', `m-${slugBase}`)
   const product: CatalogProduct = {
@@ -1334,6 +1358,7 @@ export async function mysqlCreateCatalogProduct(input: {
     shopUrl: `/product/${slug}`,
     featured: Boolean(input.featured),
     createdOn: new Date().toISOString(),
+    seo: input.seo,
   }
   await mysqlUpsertCatalogProduct(product)
   return product
@@ -1345,7 +1370,7 @@ export async function mysqlListCatalogProducts(): Promise<CatalogProduct[]> {
     const pool = await getPool()
     const [rows] = await pool.query<CatalogProductRow[]>(
       `SELECT id, slug, name, product_type, description, details, price, compare_at, manufacturer,
-              category_id, category_name, featured, in_stock, created_on
+              category_id, category_name, featured, in_stock, created_on, seo
        FROM accord_nx_products ORDER BY name ASC`,
     )
     return rows.map(mapCatalogProductRow)

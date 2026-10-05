@@ -11,6 +11,7 @@ import { JsonLd } from '@/components/json-ld'
 import { categoryHref, displayPrice, productHref } from '@/lib/catalog'
 import { catalogueDownloadHref } from '@/lib/content'
 import { breadcrumbJsonLd, pageMetadata, productJsonLd, productMetaDescription } from '@/lib/seo'
+import { seoKeywordsList } from '@/lib/seo-fields'
 import { getCatalogProduct, getPriceVisibility, getRelatedProducts, listCatalogues } from '@/lib/site-data'
 import { COMPANY } from '@/lib/utils'
 
@@ -23,10 +24,12 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const image = product.image || COMPANY.logo
   const description = productMetaDescription(product)
   return pageMetadata({
-    title: product.name,
+    title: product.seo?.seoTitle || product.name,
     description,
     path: productHref(product),
     image,
+    keywords: seoKeywordsList(product.seo?.seoKeywords || product.seo?.focusKeyword || ''),
+    absoluteTitle: Boolean(product.seo?.seoTitle),
   })
 }
 
@@ -43,12 +46,13 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     listCatalogues().catch(() => []),
   ])
   const catalogueHref = catalogueDownloadHref(product, catalogues)
-  const priceLabel = displayPrice(product, showPrices)
+  const revealPrice = showPrices && (!product.onOffer || product.offerShowPrice !== false)
+  const priceLabel = displayPrice(product, revealPrice)
   const categoryPath = categoryHref({ slug: product.categoryId, name: product.categoryName })
 
   return (
     <main className="min-h-screen">
-      <JsonLd data={productJsonLd(product, showPrices)} />
+      <JsonLd data={productJsonLd(product, revealPrice)} />
       <JsonLd
         data={breadcrumbJsonLd([
           { name: 'Home', path: '/' },
@@ -84,12 +88,16 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                   {product.manufacturer && <span className="product-brand">Brand: {product.manufacturer}</span>}
                 </div>
                 {product.distributedFor && <p className="product-distributed">Distributed for: {product.distributedFor}</p>}
-                {product.onOffer && <p className="offer-flag">{product.offerLabel || 'On offer'}</p>}
+                {product.onOffer && (
+                  <p className="offer-flag">
+                    {product.offerSlug ? <Link href={`/offers/${product.offerSlug}`}>{product.offerLabel || 'On offer'}</Link> : (product.offerLabel || 'On offer')}
+                  </p>
+                )}
                 <p className={priceLabel === 'Request a quote' ? 'detail-price quote-note' : 'detail-price'}>
                   {priceLabel === 'Request a quote' ? 'Available on request' : priceLabel}
                 </p>
-                {product.onOffer && product.compareAt && product.compareAt > product.price ? (
-                  <p className="offer-was">Was {displayPrice({ price: product.compareAt }, showPrices)}</p>
+                {revealPrice && product.onOffer && product.compareAt && product.compareAt > product.price ? (
+                  <p className="offer-was">Was {displayPrice({ price: product.compareAt }, true)}</p>
                 ) : null}
                 <QuoteForm product={product} catalogueHref={catalogueHref} />
                 <dl className="product-sku-row">

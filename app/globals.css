@@ -1714,6 +1714,9 @@ footer { background: #000; color: #dce9e8; padding-top: 36px; view-transition-na
   padding: 20px;
 }
 .offer-card h3 { color: var(--navy); font-size: 24px; margin: 8px 0; }
+.offer-card h3 a, .offer-flag a { color: inherit; }
+.offer-detail { max-width: 760px; }
+.offer-detail .offer-image { margin: 16px 0 20px; }
 .offer-cash { font-size: 28px; font-weight: 800; color: var(--primary); margin: 0 0 8px; }
 .offer-products { list-style: none; margin: 16px 0; padding: 0; display: grid; gap: 8px; }
 .offer-products li { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }

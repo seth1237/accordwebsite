@@ -1,8 +1,8 @@
 import type { MetadataRoute } from 'next'
 import { categoryHref, productHref } from '@/lib/catalog'
-import { getCatalog, listEvents, listInstallations, listJobs } from '@/lib/site-data'
+import { getCatalog, listEvents, listInstallations, listJobs, listOffers } from '@/lib/site-data'
 import { jobHref } from '@/lib/jobs'
-import { eventHref, installationHref } from '@/lib/content'
+import { eventHref, installationHref, offerHref } from '@/lib/content'
 import { ROUTES } from '@/lib/routes'
 import { COMPANY } from '@/lib/utils'
 
@@ -17,7 +17,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${base}${ROUTES.biomedical}`, lastModified: now, changeFrequency: 'monthly', priority: 0.7 },
     { url: `${base}${ROUTES.jobs}`, lastModified: now, changeFrequency: 'weekly', priority: 0.7 },
     { url: `${base}${ROUTES.projects}`, lastModified: now, changeFrequency: 'weekly', priority: 0.6 },
-    { url: `${base}${ROUTES.offers}`, lastModified: now, changeFrequency: 'weekly', priority: 0.4 },
+    { url: `${base}${ROUTES.offers}`, lastModified: now, changeFrequency: 'daily', priority: 0.7 },
     { url: `${base}${ROUTES.events}`, lastModified: now, changeFrequency: 'weekly', priority: 0.4 },
     { url: `${base}${ROUTES.manufacturers}`, lastModified: now, changeFrequency: 'monthly', priority: 0.3 },
     { url: `${base}${ROUTES.quote}`, lastModified: now, changeFrequency: 'monthly', priority: 0.3 },
@@ -42,10 +42,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         priority: 0.7,
       })
     }
-    const [jobs, installations, events] = await Promise.all([
+    const [jobs, installations, events, offers] = await Promise.all([
       listJobs(true),
       listInstallations(true).catch(() => []),
       listEvents(true).catch(() => []),
+      listOffers(true).catch(() => []),
     ])
     for (const job of jobs) {
       pages.push({
@@ -69,6 +70,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         lastModified: new Date(item.updatedAt),
         changeFrequency: 'weekly',
         priority: 0.4,
+      })
+    }
+    for (const item of offers) {
+      pages.push({
+        url: `${base}${offerHref(item)}`,
+        lastModified: new Date(item.updatedAt),
+        changeFrequency: 'weekly',
+        priority: 0.65,
       })
     }
   } catch {

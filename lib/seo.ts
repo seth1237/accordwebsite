@@ -26,6 +26,7 @@ export function pageMetadata({
   index = true,
   absoluteTitle = false,
   type = 'website',
+  keywords,
 }: {
   title: string
   description: string
@@ -35,6 +36,7 @@ export function pageMetadata({
   index?: boolean
   absoluteTitle?: boolean
   type?: 'website' | 'article'
+  keywords?: string[]
 }): Metadata {
   const url = absoluteUrl(path)
   const desc = truncateMeta(description)
@@ -49,6 +51,7 @@ export function pageMetadata({
   return {
     title: absoluteTitle ? { absolute: title } : title,
     description: desc,
+    keywords: keywords?.length ? keywords : undefined,
     alternates: { canonical: url },
     robots: index ? { index: true, follow: true } : { index: false, follow: false },
     openGraph: {
@@ -198,6 +201,7 @@ export function categorySeo(slug: string, name: string): CategorySeo {
 }
 
 export function productMetaDescription(product: CatalogProduct) {
+  if (product.seo?.seoDescription) return truncateMeta(product.seo.seoDescription)
   if (product.description) return truncateMeta(product.description)
   const brand = product.manufacturer ? `${product.manufacturer} ` : ''
   const category = product.categoryName || 'medical equipment'
@@ -206,7 +210,10 @@ export function productMetaDescription(product: CatalogProduct) {
   )
 }
 
-export function productImageAlt(product: Pick<CatalogProduct, 'name' | 'categoryName'>, index?: number) {
+export function productImageAlt(product: Pick<CatalogProduct, 'name' | 'categoryName' | 'seo'>, index?: number) {
+  if (product.seo?.imageAlt) {
+    return typeof index === 'number' && index > 0 ? `${product.seo.imageAlt}, photo ${index + 1}` : product.seo.imageAlt
+  }
   const category = product.categoryName ? ` — ${product.categoryName}` : ''
   if (typeof index === 'number' && index > 0) return `${product.name}${category}, photo ${index + 1}`
   return `${product.name}${category}`

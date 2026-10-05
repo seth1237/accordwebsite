@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import type { CatalogCategory } from '@/lib/catalog'
+import { AdminSeoPanel } from '@/components/admin-seo-panel'
 
 export function AdminCatalogCreate({ categories }: { categories: CatalogCategory[] }) {
   const router = useRouter()
@@ -10,11 +11,15 @@ export function AdminCatalogCreate({ categories }: { categories: CatalogCategory
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [useNewCategory, setUseNewCategory] = useState(false)
+  const [productName, setProductName] = useState('')
+  const [productDescription, setProductDescription] = useState('')
 
   function open(next: 'product' | 'category') {
     setMode(next)
     setMessage('')
     setUseNewCategory(next === 'product' && categories.length === 0)
+    setProductName('')
+    setProductDescription('')
   }
 
   async function saveCategory(event: FormEvent<HTMLFormElement>) {
@@ -92,7 +97,7 @@ export function AdminCatalogCreate({ categories }: { categories: CatalogCategory
           </div>
           <label>
             Name
-            <input name="name" required placeholder="Product name" />
+            <input name="name" required placeholder="Product name" value={productName} onChange={(event) => setProductName(event.target.value)} />
           </label>
           <div className="admin-job-row">
             <label>
@@ -115,7 +120,7 @@ export function AdminCatalogCreate({ categories }: { categories: CatalogCategory
           </div>
           <label>
             Description
-            <textarea name="description" rows={4} placeholder="What the product is and who it is for" />
+            <textarea name="description" rows={4} placeholder="What the product is and who it is for" value={productDescription} onChange={(event) => setProductDescription(event.target.value)} />
           </label>
           <label>
             Details
@@ -143,6 +148,13 @@ export function AdminCatalogCreate({ categories }: { categories: CatalogCategory
             <input type="checkbox" name="featured" value="true" />
             Featured on the homepage
           </label>
+          <AdminSeoPanel
+            sourceName={productName}
+            sourceDescription={productDescription}
+            hasImage={false}
+            hasInternalLinks={!useNewCategory}
+            pathPrefix="/product/"
+          />
           <div className="admin-job-actions">
             <button className="button button-primary" disabled={busy}>{busy ? 'Saving…' : 'Save product'}</button>
             <button type="button" className="button button-outline" onClick={() => setMode(null)}>Close</button>

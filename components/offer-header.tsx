@@ -3,7 +3,7 @@ import { PLACEHOLDER_IMAGE, formatKes, productHref, type CatalogProduct } from '
 import { DEFAULT_OFFER_HEADER_CTA } from '@/lib/offers'
 import { ROUTES } from '@/lib/routes'
 
-export type OfferHeaderProduct = Pick<CatalogProduct, 'id' | 'name' | 'slug' | 'image' | 'price' | 'offerId'>
+export type OfferHeaderProduct = Pick<CatalogProduct, 'id' | 'name' | 'slug' | 'image' | 'price' | 'offerId' | 'offerShowPrice'>
 
 function looped(products: OfferHeaderProduct[]) {
   if (!products.length) return []
@@ -29,7 +29,7 @@ function OfferChip({ product, showPrice }: { product: OfferHeaderProduct; showPr
       <img src={product.image || PLACEHOLDER_IMAGE} alt="" />
       <span>
         <b>{product.name}</b>
-        {showPrice && product.price > 0 ? <small>{formatKes(product.price)}</small> : null}
+        {showPrice && product.offerShowPrice !== false && product.price > 0 ? <small>{formatKes(product.price)}</small> : null}
       </span>
     </Link>
   )
@@ -41,7 +41,7 @@ function OfferChipFace({ product, showPrice }: { product: OfferHeaderProduct; sh
       <img src={product.image || PLACEHOLDER_IMAGE} alt="" />
       <span>
         <b>{product.name}</b>
-        {showPrice && product.price > 0 ? <small>{formatKes(product.price)}</small> : null}
+        {showPrice && product.offerShowPrice !== false && product.price > 0 ? <small>{formatKes(product.price)}</small> : null}
       </span>
     </span>
   )

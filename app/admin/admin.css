@@ -156,7 +156,7 @@
 .offer-price-rows { display: grid; gap: 10px; }
 .offer-price-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) 120px 120px;
+  grid-template-columns: minmax(0, 1.4fr) 120px 120px auto;
   gap: 8px;
   align-items: end;
 }
@@ -415,3 +415,53 @@
 @media (max-width: 800px) {
   .admin-event-row { grid-template-columns: 1fr; padding: 0 10px 10px; }
 }
+.admin-seo {
+  display: grid;
+  gap: 12px;
+  margin: 8px 0;
+  padding: 16px;
+  border: 1px solid #dbe7e5;
+  border-radius: 14px;
+  background: #f7fbfa;
+}
+.admin-seo legend {
+  font-size: 15px;
+  font-weight: 800;
+  color: #123744;
+  padding: 0 6px;
+}
+.admin-seo > p { margin: 0; font-size: 13px; color: #60767d; }
+.admin-seo small { display: block; margin-top: 4px; color: #789096; }
+.admin-seo-preview {
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid #e4eeec;
+  border-radius: 10px;
+  background: #fff;
+}
+.admin-seo-preview span { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #789096; }
+.admin-seo-preview strong { color: #1a0dab; font-size: 18px; font-weight: 500; }
+.admin-seo-preview em { color: #006621; font-style: normal; font-size: 13px; }
+.admin-seo-preview p { margin: 4px 0 0; color: #4d5156; font-size: 13px; }
+.admin-seo-score b { display: block; margin-bottom: 8px; }
+.admin-seo-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: #e4eeec;
+  overflow: hidden;
+}
+.admin-seo-bar::after {
+  content: '';
+  display: block;
+  width: var(--seo-score, 0%);
+  height: 100%;
+  background: #1d8fd4;
+}
+.admin-seo-score.is-good .admin-seo-bar::after { background: #188038; }
+.admin-seo-score.is-ok .admin-seo-bar::after { background: #c27a00; }
+.admin-seo-score.is-low .admin-seo-bar::after { background: #c62828; }
+.admin-seo-score ul { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 4px; font-size: 12px; }
+.admin-seo-score li.ok { color: #188038; }
+.admin-seo-score li.warn { color: #c27a00; }
+.admin-seo-score li.missing { color: #c62828; }

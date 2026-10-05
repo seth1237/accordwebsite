@@ -6,6 +6,7 @@ import { OfferActions } from '@/components/offer-actions'
 import { pageMetadata } from '@/lib/seo'
 import { ROUTES } from '@/lib/routes'
 import { formatKes, productHref } from '@/lib/catalog'
+import { offerHref } from '@/lib/content'
 import { offerPriceForProduct } from '@/lib/offers'
 import { getCatalog, listOffers } from '@/lib/site-data'
 
@@ -36,13 +37,13 @@ export default async function OffersPage() {
             const linked = catalog.products.filter((product) => item.productIds.includes(product.id) || product.id === item.customProductId)
             return (
               <article className="offer-card" key={item._id}>
-                {item.banner && <img className="offer-image" src={item.banner.secureUrl} alt={item.title} />}
+                {item.banner && <img className="offer-image" src={item.banner.secureUrl} alt={item.seo?.imageAlt || item.title} />}
                 <div className="post-meta">
                   <span>{item.discountText || (item.price ? formatKes(item.price) : 'Offer')}</span>
                   <span>Until {new Date(item.endDate).toLocaleDateString('en-KE')}</span>
                 </div>
-                <h3>{item.title}</h3>
-                {item.kind === 'custom' && item.price > 0 && <p className="offer-cash">{formatKes(item.price)}</p>}
+                <h3><Link href={offerHref(item)}>{item.title}</Link></h3>
+                {item.kind === 'custom' && item.showPrice !== false && item.price > 0 && <p className="offer-cash">{formatKes(item.price)}</p>}
                 {item.description ? <p>{item.description}</p> : null}
                 {linked.length > 0 && (
                   <ul className="offer-products">
@@ -52,7 +53,7 @@ export default async function OffersPage() {
                       return (
                         <li key={product.id}>
                           <Link href={productHref(product)}>{product.name}</Link>
-                          {cash > 0 ? (
+                          {deal.showPrice && cash > 0 ? (
                             <span>
                               {deal.compareAt > cash ? <s>{formatKes(deal.compareAt)}</s> : null}
                               {formatKes(cash)}

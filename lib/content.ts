@@ -1,4 +1,5 @@
 import type { EventBlock } from '@/lib/event-body'
+import type { SeoFields } from '@/lib/seo-fields'
 
 export type MediaAsset = {
   publicId: string
@@ -26,6 +27,7 @@ export type OfferProductPrice = {
   productId: string
   price: number
   compareAt: number
+  showPrice: boolean
 }
 
 export type Offer = {
@@ -38,6 +40,7 @@ export type Offer = {
   productPrices: OfferProductPrice[]
   price: number
   compareAt: number
+  showPrice: boolean
   customProductId: string
   startDate: string
   endDate: string
@@ -45,6 +48,8 @@ export type Offer = {
   showHeader: boolean
   headerTagline: string
   headerCta: string
+  slug: string
+  seo: SeoFields
   published: boolean
   createdAt: string
   updatedAt: string
@@ -140,6 +145,10 @@ export function eventHref(item: Pick<EventPost, 'slug'>) {
 
 export function installationHref(item: Pick<Installation, 'slug'>) {
   return `/project/${item.slug}`
+}
+
+export function offerHref(item: Pick<Offer, 'slug' | '_id'>) {
+  return `/offers/${item.slug || item._id}`
 }
 
 export function csvIds(value: string) {

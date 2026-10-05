@@ -16,6 +16,7 @@ import { normalizePath } from '@/lib/content'
 import { isCloudinaryConfigured, uploadSiteImage } from '@/lib/cloudinary'
 import { excerptFromBody, parseEventBody } from '@/lib/event-body'
 import { parseOfferProductPrices } from '@/lib/offers'
+import { emptySeo, parseSeo } from '@/lib/seo-fields'
 import { prepareStoredImage } from '@/lib/image-convert'
 import { ensureIndexes, getCollection, isMongoConfigured } from '@/lib/mongodb'
 import {
@@ -154,6 +155,7 @@ function serializeOffer(doc: WithDates<Offer> & { _id: ObjectId }): Offer {
     productPrices: parseOfferProductPrices((doc as Offer & { productPrices?: unknown }).productPrices),
     price: Number(doc.price) || 0,
     compareAt: Number(doc.compareAt) || 0,
+    showPrice: doc.showPrice !== false,
     customProductId: doc.customProductId || '',
     startDate: iso(doc.startDate),
     endDate: iso(doc.endDate),
@@ -161,6 +163,8 @@ function serializeOffer(doc: WithDates<Offer> & { _id: ObjectId }): Offer {
     showHeader: Boolean(doc.showHeader),
     headerTagline: doc.headerTagline || '',
     headerCta: doc.headerCta || '',
+    slug: doc.slug || '',
+    seo: doc.seo ? parseSeo(doc.seo) : emptySeo(),
     published: Boolean(doc.published),
     createdAt: iso(doc.createdAt),
     updatedAt: iso(doc.updatedAt),
@@ -382,6 +386,17 @@ export async function getOfferById(id: string): Promise<Offer | null> {
   return doc ? serializeOffer(doc as WithDates<Offer> & { _id: ObjectId }) : null
 }
 
+export async function getOfferBySlug(slug: string): Promise<Offer | null> {
+  const key = String(slug || '').trim()
+  if (!key) return null
+  if (isMysqlConfigured()) {
+    const bySlug = await mysqlGetDocBySlug<Offer>('offer', key)
+    if (bySlug) return serializeOffer(bySlug as WithDates<Offer> & { _id: ObjectId })
+    return getOfferById(key)
+  }
+  return getOfferById(key)
+}
+
 async function attachOfferBanner(productId: string, banner?: Offer['banner'] | null) {
   const fileId = banner?.publicId ? mysqlFileIdFromPublicId(banner.publicId) : null
   if (!fileId) return
@@ -449,6 +464,7 @@ export async function createOffer(input: Omit<Offer, '_id' | 'createdAt' | 'upda
     productPrices: parseOfferProductPrices(input.productPrices),
     price: Number(input.price) || 0,
     compareAt: Number(input.compareAt) || 0,
+    showPrice: input.showPrice !== false,
     customProductId,
     startDate: parseDate(input.startDate).toISOString(),
     endDate: parseDate(input.endDate, new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)).toISOString(),
@@ -456,6 +472,10 @@ export async function createOffer(input: Omit<Offer, '_id' | 'createdAt' | 'upda
     showHeader: Boolean(input.showHeader),
     headerTagline: input.headerTagline || '',
     headerCta: input.headerCta || '',
+    slug: isMysqlConfigured()
+      ? await mysqlUniqueSlug('offer', slugifyName(input.seo?.seoSlug || input.title) || 'offer')
+      : slugifyName(input.seo?.seoSlug || input.title) || 'offer',
+    seo: parseSeo(input.seo),
     published: input.published,
   }
   if (isMysqlConfigured()) {
@@ -497,11 +517,16 @@ export async function updateOffer(id: string, input: Partial<Offer>): Promise<Of
     price: input.price !== undefined ? Number(input.price) || 0 : existing.price,
     compareAt: input.compareAt !== undefined ? Number(input.compareAt) || 0 : existing.compareAt,
     productPrices: input.productPrices !== undefined ? parseOfferProductPrices(input.productPrices) : existing.productPrices,
+    showPrice: input.showPrice !== undefined ? input.showPrice !== false : existing.showPrice,
     startDate: input.startDate !== undefined ? parseDate(input.startDate).toISOString() : existing.startDate,
     endDate: input.endDate !== undefined ? parseDate(input.endDate).toISOString() : existing.endDate,
     showHeader: input.showHeader !== undefined ? Boolean(input.showHeader) : existing.showHeader,
     headerTagline: input.headerTagline !== undefined ? input.headerTagline : existing.headerTagline,
     headerCta: input.headerCta !== undefined ? input.headerCta : existing.headerCta,
+    seo: input.seo !== undefined ? parseSeo(input.seo) : existing.seo,
+    slug: isMysqlConfigured()
+      ? await mysqlUniqueSlug('offer', slugifyName(input.seo?.seoSlug || existing.seo?.seoSlug || input.title || existing.title) || existing.slug || 'offer', id)
+      : slugifyName(input.seo?.seoSlug || existing.slug || input.title || existing.title) || existing.slug,
   }
   if (isMysqlConfigured()) {
     const item = await mysqlUpdateDoc<Offer>('offer', id, next)

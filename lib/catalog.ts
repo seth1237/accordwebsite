@@ -50,7 +50,10 @@ export type CatalogProduct = {
   createdOn?: string
   onOffer?: boolean
   offerId?: string
+  offerSlug?: string
   offerLabel?: string
+  offerShowPrice?: boolean
+  seo?: import('@/lib/seo-fields').SeoFields
 }
 
 export type CatalogCategory = {

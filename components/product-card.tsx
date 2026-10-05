@@ -44,7 +44,7 @@ export function ProductCard({
         </div>
         <div className="product-info">
           <h3>{product.name}</h3>
-          {product.onOffer && product.price > 0 ? <strong>{displayPrice(product, showPrice)}</strong> : null}
+          {product.onOffer && product.price > 0 && product.offerShowPrice !== false ? <strong>{displayPrice(product, showPrice)}</strong> : null}
         </div>
       </Link>
       <div className="product-card-actions home-split">

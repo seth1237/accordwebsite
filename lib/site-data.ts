@@ -150,6 +150,11 @@ export async function listOffers(publishedOnly = true): Promise<Offer[]> {
   return payload?.data || []
 }
 
+export async function getOfferBySlug(slug: string): Promise<Offer | null> {
+  const payload = await backendJson<{ data: Offer }>(`/api/offers/${encodeURIComponent(slug)}`)
+  return payload?.data || null
+}
+
 export async function getOfferAnalytics() {
   const payload = await backendJson<{
     data: {

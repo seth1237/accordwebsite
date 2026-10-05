@@ -182,6 +182,8 @@ export async function createCatalogProduct(input: {
   price?: number
   inStock?: boolean
   featured?: boolean
+  seo?: CatalogProduct['seo']
+  slug?: string
 }) {
   if (!isMysqlConfigured()) throw new Error('MySQL is not configured')
   const name = String(input.name || '').trim()
@@ -210,6 +212,8 @@ export async function createCatalogProduct(input: {
     price: input.price,
     inStock: input.inStock,
     featured: input.featured,
+    seo: input.seo,
+    slug: input.slug,
   })
   await mysqlSetLocalCatalogReady(true).catch(() => null)
   await invalidateCatalog()

@@ -7,7 +7,8 @@ import { ADMIN_COOKIE, adminCookieOptions, authenticateAdmin, createAdminSession
 import { slugifyName } from '../../lib/catalog'
 import { createCatalogCategory, createCatalogProduct, getCatalog, getCatalogProduct, getPriceVisibility } from '../../lib/catalog-data'
 import { csvIds } from '../../lib/content'
-import { parseOfferProductPrices } from '../../lib/offers'
+import { isOfferLive, parseOfferProductPrices } from '../../lib/offers'
+import { parseSeo } from '../../lib/seo-fields'
 import { excerptFromBody, parseEventBody } from '../../lib/event-body'
 import { prepareStoredImage } from '../../lib/image-convert'
 import {
@@ -39,6 +40,7 @@ import {
   getInstallationBySlug,
   getManufacturerByToken,
   getOfferById,
+  getOfferBySlug,
   getRedirectById,
   listCatalogues,
   listCompanyProfilePages,
@@ -265,6 +267,11 @@ app.get('/api/jobs/:slug', async (c) => {
   return c.json({ success: true, data: job })
 })
 app.get('/api/offers', async (c) => c.json({ success: true, data: await listOffers(true).catch(() => []) }))
+app.get('/api/offers/:slug', async (c) => {
+  const item = await getOfferBySlug(c.req.param('slug')).catch(() => null)
+  if (!item || !isOfferLive(item)) return c.json({ success: false, message: 'Offer not found' }, 404)
+  return c.json({ success: true, data: item })
+})
 app.get('/api/events', async (c) => c.json({ success: true, data: await listEvents(true).catch(() => []) }))
 app.get('/api/events/:slug', async (c) => {
   const item = await getEventBySlug(c.req.param('slug'))
@@ -617,6 +624,15 @@ app.post('/api/admin/products', async (c) => {
       price: Number(formText(form, 'price')) || 0,
       inStock: form.get('inStock') === 'true',
       featured: form.get('featured') === 'true',
+      seo: parseSeo({
+        focusKeyword: formText(form, 'focusKeyword'),
+        seoTitle: formText(form, 'seoTitle'),
+        seoDescription: formText(form, 'seoDescription'),
+        seoSlug: formText(form, 'seoSlug'),
+        seoKeywords: formText(form, 'seoKeywords'),
+        imageAlt: formText(form, 'imageAlt'),
+      }),
+      slug: formText(form, 'seoSlug'),
     })
     const files = form.getAll('file').filter((item): item is File => item instanceof File)
     for (const file of files) {
@@ -940,6 +956,7 @@ app.post('/api/admin/offers', async (c) => {
     productPrices: parseOfferProductPrices(formText(form, 'productPrices')),
     price: Number(formText(form, 'price')) || 0,
     compareAt: Number(formText(form, 'compareAt')) || 0,
+    showPrice: formChecked(form, 'showPrice'),
     customProductId: '',
     startDate: formText(form, 'startDate') || new Date().toISOString(),
     endDate: formText(form, 'endDate') || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
@@ -947,6 +964,15 @@ app.post('/api/admin/offers', async (c) => {
     showHeader: formChecked(form, 'showHeader'),
     headerTagline: formText(form, 'headerTagline'),
     headerCta: formText(form, 'headerCta'),
+    slug: formText(form, 'seoSlug'),
+    seo: parseSeo({
+      focusKeyword: formText(form, 'focusKeyword'),
+      seoTitle: formText(form, 'seoTitle'),
+      seoDescription: formText(form, 'seoDescription'),
+      seoSlug: formText(form, 'seoSlug'),
+      seoKeywords: formText(form, 'seoKeywords'),
+      imageAlt: formText(form, 'imageAlt'),
+    }),
     published: formChecked(form, 'published'),
   })
   invalidatePublicCatalog()
@@ -973,12 +999,21 @@ app.patch('/api/admin/offers/:id', async (c) => {
     productPrices: parseOfferProductPrices(formText(form, 'productPrices')),
     price: Number(formText(form, 'price') || existing.price) || 0,
     compareAt: Number(formText(form, 'compareAt') || existing.compareAt) || 0,
+    showPrice: form.has('showPrice') ? formChecked(form, 'showPrice') : existing.showPrice,
     startDate: formText(form, 'startDate') || existing.startDate,
     endDate: formText(form, 'endDate') || existing.endDate,
     banner,
     showHeader: form.has('showHeader') ? formChecked(form, 'showHeader') : existing.showHeader,
     headerTagline: form.has('headerTagline') ? formText(form, 'headerTagline') : existing.headerTagline,
     headerCta: form.has('headerCta') ? formText(form, 'headerCta') : existing.headerCta,
+    seo: parseSeo({
+      focusKeyword: formText(form, 'focusKeyword'),
+      seoTitle: formText(form, 'seoTitle'),
+      seoDescription: formText(form, 'seoDescription'),
+      seoSlug: formText(form, 'seoSlug'),
+      seoKeywords: formText(form, 'seoKeywords'),
+      imageAlt: formText(form, 'imageAlt'),
+    }),
     published: formChecked(form, 'published'),
   })
   invalidatePublicCatalog()
