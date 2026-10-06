@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { SiteFooter } from '@/components/site-footer'
 import { SiteHeader } from '@/components/site-header'
 import { CompanyProfileBook } from '@/components/company-profile-book'
+import { Breadcrumbs, HOME_CRUMB } from '@/components/breadcrumbs'
 import { ROUTES } from '@/lib/routes'
 import { pageMetadata } from '@/lib/seo'
 import { COMPANY } from '@/lib/utils'
@@ -34,6 +35,7 @@ export default async function AboutPage() {
     <main className="min-h-screen">
       <SiteHeader />
       <section className="shell section about-page">
+        <Breadcrumbs items={[HOME_CRUMB, { name: 'About', path: ROUTES.about }]} />
         <span className="kicker">Who we are</span>
         <h1 className="page-title">About <em>{COMPANY.shortName}.</em></h1>
         <p className="hero-lede">

@@ -6,6 +6,7 @@ import { installationHref } from '@/lib/content'
 import { pageMetadata } from '@/lib/seo'
 import { ROUTES } from '@/lib/routes'
 import { listInstallations } from '@/lib/site-data'
+import { Breadcrumbs, HOME_CRUMB } from '@/components/breadcrumbs'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,6 +25,7 @@ export default async function ProjectsPage() {
     <main className="min-h-screen">
       <SiteHeader />
       <section className="shell section">
+        <Breadcrumbs items={[HOME_CRUMB, { name: 'Projects', path: ROUTES.projects }]} />
         <span className="kicker">From the field</span>
         <h1 className="page-title">Recent <em>projects.</em></h1>
         <p className="hero-lede">Case studies from facilities we have equipped and commissioned.</p>

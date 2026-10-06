@@ -1,4 +1,3 @@
-import Link from 'next/link'
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { SiteFooter } from '@/components/site-footer'
@@ -9,6 +8,7 @@ import { ROUTES } from '@/lib/routes'
 import { getJobBySlug } from '@/lib/site-data'
 import { COMPANY } from '@/lib/utils'
 import { JobShare } from '@/components/job-share'
+import { Breadcrumbs, HOME_CRUMB } from '@/components/breadcrumbs'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,7 +33,13 @@ export default async function VacancyPage({ params }: { params: Promise<{ slug: 
     <main className="min-h-screen">
       <SiteHeader />
       <section className="shell section job-detail">
-        <Link href={ROUTES.jobs} className="text-link">← All roles</Link>
+        <Breadcrumbs
+          items={[
+            HOME_CRUMB,
+            { name: 'Careers', path: ROUTES.jobs },
+            { name: job.title, path: jobHref(job) },
+          ]}
+        />
         {job.image && (
           <div className="job-hero">
             <img src={job.image.secureUrl} alt={job.title} />

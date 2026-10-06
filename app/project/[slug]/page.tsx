@@ -1,4 +1,3 @@
-import Link from 'next/link'
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { SiteFooter } from '@/components/site-footer'
@@ -7,6 +6,7 @@ import { installationHref } from '@/lib/content'
 import { pageMetadata } from '@/lib/seo'
 import { ROUTES } from '@/lib/routes'
 import { getInstallationBySlug } from '@/lib/site-data'
+import { Breadcrumbs, HOME_CRUMB } from '@/components/breadcrumbs'
 import { COMPANY } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
@@ -31,7 +31,13 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     <main className="min-h-screen">
       <SiteHeader />
       <section className="shell section job-detail">
-        <Link href={ROUTES.projects} className="text-link">← All projects</Link>
+        <Breadcrumbs
+          items={[
+            HOME_CRUMB,
+            { name: 'Projects', path: ROUTES.projects },
+            { name: item.title, path: installationHref(item) },
+          ]}
+        />
         {item.cover && (
           <div className="job-hero">
             <img src={item.cover.secureUrl} alt={item.title} />

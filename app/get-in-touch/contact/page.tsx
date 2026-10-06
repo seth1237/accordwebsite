@@ -1,11 +1,11 @@
 import type { Metadata } from 'next'
 import { Mail, MapPin, Phone, Clock, Warehouse, Share2 } from 'lucide-react'
 import { ContactForm } from '@/components/contact-form'
-import { JsonLd } from '@/components/json-ld'
 import { SiteFooter } from '@/components/site-footer'
 import { SiteHeader } from '@/components/site-header'
 import { SocialLinks } from '@/components/social-links'
-import { breadcrumbJsonLd, pageMetadata } from '@/lib/seo'
+import { Breadcrumbs, HOME_CRUMB } from '@/components/breadcrumbs'
+import { pageMetadata } from '@/lib/seo'
 import { ROUTES } from '@/lib/routes'
 import { COMPANY } from '@/lib/utils'
 
@@ -19,14 +19,9 @@ export const metadata: Metadata = pageMetadata({
 export default function ContactPage() {
   return (
     <main className="min-h-screen">
-      <JsonLd
-        data={breadcrumbJsonLd([
-          { name: 'Home', path: '/' },
-          { name: 'Contact', path: ROUTES.contact },
-        ])}
-      />
       <SiteHeader />
       <section id="contact" className="shell section contact-page">
+        <Breadcrumbs items={[HOME_CRUMB, { name: 'Contact', path: ROUTES.contact }]} />
         <span className="kicker">Get in touch</span>
         <h1 className="page-title">Contact <em>us.</em></h1>
         <p className="hero-lede">

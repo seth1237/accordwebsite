@@ -1,14 +1,13 @@
 import { Suspense } from 'react'
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { SiteFooter } from '@/components/site-footer'
 import { SiteHeader } from '@/components/site-header'
 import { CatalogBrowser } from '@/components/catalog-browser'
 import { ShopShell } from '@/components/shop-shell'
-import { JsonLd } from '@/components/json-ld'
+import { Breadcrumbs, HOME_CRUMB } from '@/components/breadcrumbs'
 import { categoryHref, publicCategorySlug, resolveCategorySlug } from '@/lib/catalog'
-import { breadcrumbJsonLd, categorySeo, pageMetadata } from '@/lib/seo'
+import { categorySeo, pageMetadata } from '@/lib/seo'
 import { ROUTES } from '@/lib/routes'
 import { getCatalog, getPriceVisibility, listCatalogues } from '@/lib/site-data'
 import { COMPANY } from '@/lib/utils'
@@ -45,21 +44,16 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
 
   return (
     <main className="min-h-screen">
-      <JsonLd
-        data={breadcrumbJsonLd([
-          { name: 'Home', path: '/' },
-          { name: 'Products', path: ROUTES.products },
-          { name: category.name, path: categoryHref(category) },
-        ])}
-      />
       <SiteHeader />
       <ShopShell activeSlug={category.slug}>
         <section id="products" className="section">
-          <nav className="product-breadcrumb" aria-label="Breadcrumb">
-            <Link href={ROUTES.products}>Products</Link>
-            <span>/</span>
-            <span>{category.name}</span>
-          </nav>
+          <Breadcrumbs
+            items={[
+              HOME_CRUMB,
+              { name: 'Products', path: ROUTES.products },
+              { name: category.name, path: categoryHref(category) },
+            ]}
+          />
           <span className="kicker">Category</span>
           <h1 className="page-title">{seo.h1}</h1>
           <p className="hero-lede">{seo.lede}</p>

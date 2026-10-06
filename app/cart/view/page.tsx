@@ -3,6 +3,7 @@ import { SiteFooter } from '@/components/site-footer'
 import { SiteHeader } from '@/components/site-header'
 import { QuoteCartPanel } from '@/components/quote-cart-panel'
 import { QuoteInterestCarousel } from '@/components/quote-interest-carousel'
+import { Breadcrumbs, HOME_CRUMB } from '@/components/breadcrumbs'
 import { pageMetadata } from '@/lib/seo'
 import { ROUTES } from '@/lib/routes'
 import { getCatalog, getPriceVisibility, listCatalogues } from '@/lib/site-data'
@@ -27,6 +28,7 @@ export default async function CartViewPage() {
     <main className="min-h-screen">
       <SiteHeader />
       <section className="shell section">
+        <Breadcrumbs items={[HOME_CRUMB, { name: 'Request a quote', path: ROUTES.quote }]} />
         <span className="kicker">Quote cart</span>
         <h1 className="page-title">Request a <em>quote.</em></h1>
         <p className="hero-lede">Add products from the catalogue, then send one request for everything you need.</p>

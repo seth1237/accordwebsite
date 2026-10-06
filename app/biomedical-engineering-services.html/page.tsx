@@ -3,7 +3,8 @@ import type { Metadata } from 'next'
 import { SiteFooter } from '@/components/site-footer'
 import { SiteHeader } from '@/components/site-header'
 import { JsonLd } from '@/components/json-ld'
-import { breadcrumbJsonLd, pageMetadata } from '@/lib/seo'
+import { Breadcrumbs, HOME_CRUMB } from '@/components/breadcrumbs'
+import { pageMetadata } from '@/lib/seo'
 import { ROUTES } from '@/lib/routes'
 import { COMPANY } from '@/lib/utils'
 
@@ -34,12 +35,6 @@ export default function BiomedicalServicesPage() {
   return (
     <main className="min-h-screen">
       <JsonLd
-        data={breadcrumbJsonLd([
-          { name: 'Home', path: '/' },
-          { name: 'Biomedical engineering services', path: ROUTES.biomedical },
-        ])}
-      />
-      <JsonLd
         data={{
           '@context': 'https://schema.org',
           '@type': 'Service',
@@ -52,6 +47,7 @@ export default function BiomedicalServicesPage() {
       />
       <SiteHeader />
       <section className="shell section about-page">
+        <Breadcrumbs items={[HOME_CRUMB, { name: 'Biomedical engineering services', path: ROUTES.biomedical }]} />
         <span className="kicker">After-sales support</span>
         <h1 className="page-title">Biomedical engineering <em>services.</em></h1>
         <p className="hero-lede">

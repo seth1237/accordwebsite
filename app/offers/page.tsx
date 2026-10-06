@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { SiteFooter } from '@/components/site-footer'
 import { SiteHeader } from '@/components/site-header'
 import { OfferActions } from '@/components/offer-actions'
+import { Breadcrumbs, HOME_CRUMB } from '@/components/breadcrumbs'
 import { pageMetadata } from '@/lib/seo'
 import { ROUTES } from '@/lib/routes'
 import { formatKes, productHref } from '@/lib/catalog'
@@ -28,6 +29,7 @@ export default async function OffersPage() {
     <main className="min-h-screen">
       <SiteHeader />
       <section className="shell section">
+        <Breadcrumbs items={[HOME_CRUMB, { name: 'Offers', path: ROUTES.offers }]} />
         <span className="kicker">Current deals</span>
         <h1 className="page-title">Active <em>offers.</em></h1>
         <p className="hero-lede">Priced deals and featured machines. Request on WhatsApp or open the product.</p>

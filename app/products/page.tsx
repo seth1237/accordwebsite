@@ -4,8 +4,8 @@ import { SiteFooter } from '@/components/site-footer'
 import { SiteHeader } from '@/components/site-header'
 import { CatalogBrowser } from '@/components/catalog-browser'
 import { ShopShell } from '@/components/shop-shell'
-import { JsonLd } from '@/components/json-ld'
-import { breadcrumbJsonLd, pageMetadata } from '@/lib/seo'
+import { Breadcrumbs, HOME_CRUMB } from '@/components/breadcrumbs'
+import { pageMetadata } from '@/lib/seo'
 import { ROUTES } from '@/lib/routes'
 import { getCatalog, getPriceVisibility, listCatalogues } from '@/lib/site-data'
 
@@ -29,15 +29,10 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
 
   return (
     <main className="min-h-screen">
-      <JsonLd
-        data={breadcrumbJsonLd([
-          { name: 'Home', path: '/' },
-          { name: 'Products', path: ROUTES.products },
-        ])}
-      />
       <SiteHeader />
       <ShopShell>
         <section id="products" className="section">
+          <Breadcrumbs items={[HOME_CRUMB, { name: 'Products', path: ROUTES.products }]} />
           <span className="kicker">Shop catalogue</span>
           <h1 className="page-title">Medical equipment <em>catalogue.</em></h1>
           <p className="hero-lede">

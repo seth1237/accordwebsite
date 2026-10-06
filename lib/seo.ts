@@ -222,16 +222,22 @@ export function productImageAlt(product: Pick<CatalogProduct, 'name' | 'category
   return `${product.name}${category}`
 }
 
-export function breadcrumbJsonLd(items: Array<{ name: string; path: string }>) {
+export type BreadcrumbCrumb = { name: string; path: string }
+
+/** Google BreadcrumbList: last ListItem omits `item`; Google uses the page URL. */
+export function breadcrumbJsonLd(items: BreadcrumbCrumb[]) {
   return {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
-    itemListElement: items.map((item, index) => ({
-      '@type': 'ListItem',
-      position: index + 1,
-      name: item.name,
-      item: absoluteUrl(item.path),
-    })),
+    itemListElement: items.map((crumb, index) => {
+      const entry: Record<string, unknown> = {
+        '@type': 'ListItem',
+        position: index + 1,
+        name: crumb.name,
+      }
+      if (index < items.length - 1) entry.item = absoluteUrl(crumb.path)
+      return entry
+    }),
   }
 }
 

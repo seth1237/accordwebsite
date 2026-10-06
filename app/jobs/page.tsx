@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { SiteFooter } from '@/components/site-footer'
 import { SiteHeader } from '@/components/site-header'
 import { JobShare } from '@/components/job-share'
+import { Breadcrumbs, HOME_CRUMB } from '@/components/breadcrumbs'
 import { jobHref } from '@/lib/jobs'
 import { pageMetadata } from '@/lib/seo'
 import { ROUTES } from '@/lib/routes'
@@ -25,6 +26,7 @@ export default async function Jobs() {
     <main className="min-h-screen">
       <SiteHeader />
       <section className="shell section">
+        <Breadcrumbs items={[HOME_CRUMB, { name: 'Careers', path: ROUTES.jobs }]} />
         <span className="kicker">Make an impact</span>
         <h1 className="page-title">Open <em>roles.</em></h1>
         <p className="hero-lede">Join Accord Medical Supplies — careers in sales, biomedical support and warehouse operations for healthcare facilities in Kenya.</p>

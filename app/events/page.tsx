@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { SiteFooter } from '@/components/site-footer'
 import { SiteHeader } from '@/components/site-header'
 import { EventShare } from '@/components/event-share'
+import { Breadcrumbs, HOME_CRUMB } from '@/components/breadcrumbs'
 import { eventHref, type EventPost } from '@/lib/content'
 import { pageMetadata } from '@/lib/seo'
 import { ROUTES } from '@/lib/routes'
@@ -51,6 +52,7 @@ export default async function EventsPage() {
     <main className="min-h-screen">
       <SiteHeader />
       <section className="shell section">
+        <Breadcrumbs items={[HOME_CRUMB, { name: 'Events', path: ROUTES.events }]} />
         <span className="kicker">Calendar</span>
         <h1 className="page-title">Upcoming <em>events.</em></h1>
         <p className="hero-lede">Trainings, demonstrations, and facility visits.</p>

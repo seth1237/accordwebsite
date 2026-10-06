@@ -7,8 +7,9 @@ import { JsonLd } from '@/components/json-ld'
 import { EventBodyView, EventMeta } from '@/components/event-body-view'
 import { EventEngagement } from '@/components/event-engagement'
 import { EventShare } from '@/components/event-share'
+import { Breadcrumbs, HOME_CRUMB } from '@/components/breadcrumbs'
 import { eventHref } from '@/lib/content'
-import { articleJsonLd, breadcrumbJsonLd, pageMetadata } from '@/lib/seo'
+import { articleJsonLd, pageMetadata } from '@/lib/seo'
 import { ROUTES } from '@/lib/routes'
 import { getEventBySlug } from '@/lib/site-data'
 import { COMPANY } from '@/lib/utils'
@@ -45,16 +46,15 @@ export default async function EventPostPage({ params }: { params: Promise<{ slug
         date: item.startAt,
         image: `/events/${item.slug}/opengraph-image`,
       })} />
-      <JsonLd
-        data={breadcrumbJsonLd([
-          { name: 'Home', path: '/' },
-          { name: 'Events', path: ROUTES.events },
-          { name: item.title, path },
-        ])}
-      />
       <SiteHeader />
       <article className="shell section event-article">
-        <Link href={ROUTES.events} className="text-link">← All events</Link>
+        <Breadcrumbs
+          items={[
+            HOME_CRUMB,
+            { name: 'Events', path: ROUTES.events },
+            { name: item.title, path },
+          ]}
+        />
         <span className="kicker">Event</span>
         <h1 className="page-title">{item.title}</h1>
         <div className="event-headline">

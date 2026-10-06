@@ -4,11 +4,11 @@ import { notFound } from 'next/navigation'
 import { SiteFooter } from '@/components/site-footer'
 import { SiteHeader } from '@/components/site-header'
 import { OfferActions } from '@/components/offer-actions'
-import { JsonLd } from '@/components/json-ld'
+import { Breadcrumbs, HOME_CRUMB } from '@/components/breadcrumbs'
 import { formatKes, productHref } from '@/lib/catalog'
 import { offerHref } from '@/lib/content'
 import { isOfferLive, offerPriceForProduct } from '@/lib/offers'
-import { breadcrumbJsonLd, pageMetadata } from '@/lib/seo'
+import { pageMetadata } from '@/lib/seo'
 import { seoKeywordsList } from '@/lib/seo-fields'
 import { ROUTES } from '@/lib/routes'
 import { getCatalog, getOfferBySlug } from '@/lib/site-data'
@@ -42,20 +42,15 @@ export default async function OfferPage({ params }: { params: Promise<{ slug: st
 
   return (
     <main className="min-h-screen">
-      <JsonLd
-        data={breadcrumbJsonLd([
-          { name: 'Home', path: '/' },
-          { name: 'Offers', path: ROUTES.offers },
-          { name: item.title, path: offerHref(item) },
-        ])}
-      />
       <SiteHeader />
       <article className="shell section offer-detail">
-        <nav className="product-breadcrumb" aria-label="Breadcrumb">
-          <Link href={ROUTES.offers}>Offers</Link>
-          <span>/</span>
-          <span>{item.title}</span>
-        </nav>
+        <Breadcrumbs
+          items={[
+            HOME_CRUMB,
+            { name: 'Offers', path: ROUTES.offers },
+            { name: item.title, path: offerHref(item) },
+          ]}
+        />
         {item.banner && <img className="offer-image" src={item.banner.secureUrl} alt={imageAlt} />}
         <span className="kicker">On offer</span>
         <h1 className="page-title">{item.title}</h1>
