@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import { ArrowRight, ChevronDown, Menu, ShoppingCart, X } from 'lucide-react'
 import { Logo } from '@/components/logo'
 import { SearchBox } from '@/components/search-box'
+import { SocialLinks } from '@/components/social-links'
 import { useQuoteCart } from '@/components/quote-cart'
 import { COMPANY } from '@/lib/utils'
 import { productHref, categoryHref, type NavCategory, type SearchProduct } from '@/lib/catalog'
@@ -169,7 +170,10 @@ export function SiteHeaderNav({
         <div className="topline">
           <div className="shell flex items-center justify-between gap-4">
             <span>{COMPANY.tagline}</span>
-            <span className="hidden sm:inline">Nairobi · {COMPANY.phone}</span>
+            <div className="topline-end">
+              <span className="hidden sm:inline">Nairobi · {COMPANY.phone}</span>
+              <SocialLinks className="topline-socials" />
+            </div>
           </div>
         </div>
         <div className="shell header-row">
@@ -299,6 +303,7 @@ export function SiteHeaderNav({
                 Quote cart{count > 0 ? ` (${count})` : ''}
               </Link>
             </div>
+            <SocialLinks labeled className="mobile-socials" />
             <div className="mobile-categories">
               <div className="mobile-categories-head">
                 <p>Product categories</p>

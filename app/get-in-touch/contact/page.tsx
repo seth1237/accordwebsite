@@ -1,9 +1,10 @@
 import type { Metadata } from 'next'
-import { Mail, MapPin, Phone, Clock, Warehouse } from 'lucide-react'
+import { Mail, MapPin, Phone, Clock, Warehouse, Share2 } from 'lucide-react'
 import { ContactForm } from '@/components/contact-form'
 import { JsonLd } from '@/components/json-ld'
 import { SiteFooter } from '@/components/site-footer'
 import { SiteHeader } from '@/components/site-header'
+import { SocialLinks } from '@/components/social-links'
 import { breadcrumbJsonLd, pageMetadata } from '@/lib/seo'
 import { ROUTES } from '@/lib/routes'
 import { COMPANY } from '@/lib/utils'
@@ -69,6 +70,14 @@ export default function ContactPage() {
               <div>
                 <h2 className="contact-label">Hours</h2>
                 <p>{COMPANY.hours}</p>
+              </div>
+            </article>
+            <article>
+              <Share2 size={18} />
+              <div>
+                <h2 className="contact-label">Follow Accord</h2>
+                <p>X, Instagram, Facebook, LinkedIn and TikTok — same company as this website.</p>
+                <SocialLinks labeled />
               </div>
             </article>
           </div>

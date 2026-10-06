@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { SocialLinks } from '@/components/social-links'
 import { siteJobCount } from '@/lib/site-data'
 import { HOME_TOPIC_LINKS } from '@/lib/seo'
 import { ROUTES } from '@/lib/routes'
@@ -18,6 +19,7 @@ export async function SiteFooter() {
             <a href={`https://wa.me/${COMPANY.whatsapp}`} target="_blank" rel="noopener noreferrer">WhatsApp {COMPANY.phone}</a>
             <span>{COMPANY.location}</span>
             <span>{COMPANY.warehouse}</span>
+            <SocialLinks labeled />
           </div>
         </div>
         <div className="footer-side footer-nav">

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Check, Copy, Share2 } from 'lucide-react'
+import { ShareDestinations } from '@/components/share-destinations'
 import { jobHref, type JobPost } from '@/lib/jobs'
 import { COMPANY } from '@/lib/utils'
 
@@ -37,10 +38,6 @@ export function JobShare({ job }: { job: Pick<JobPost, 'title' | 'slug' | 'locat
     setTimeout(() => setCopied(false), 1600)
   }
 
-  function shareWhatsApp() {
-    window.open(`https://wa.me/?text=${encodeURIComponent(`${shareText()} ${shareUrl()}`)}`, '_blank', 'noopener,noreferrer')
-  }
-
   return (
     <div className="share-wrap">
       <button type="button" className="button button-outline button-compact share-button" onClick={() => void nativeShare()}>
@@ -53,7 +50,7 @@ export function JobShare({ job }: { job: Pick<JobPost, 'title' | 'slug' | 'locat
             {copied ? <Check size={14} /> : <Copy size={14} />}
             {copied ? 'Copied' : 'Copy link'}
           </button>
-          <button type="button" onClick={shareWhatsApp}>WhatsApp</button>
+          <ShareDestinations url={shareUrl()} text={shareText()} />
         </div>
       )}
     </div>

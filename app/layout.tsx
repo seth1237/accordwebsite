@@ -5,6 +5,7 @@ import { JsonLd } from '@/components/json-ld'
 import { AppProviders } from '@/components/app-providers'
 import { Metricool } from '@/components/metricool'
 import { DEFAULT_DESCRIPTION, DEFAULT_TITLE, organizationJsonLd } from '@/lib/seo'
+import { TWITTER_HANDLE } from '@/lib/socials'
 import { COMPANY } from '@/lib/utils'
 
 export const metadata: Metadata = {
@@ -35,6 +36,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
+    site: `@${TWITTER_HANDLE}`,
+    creator: `@${TWITTER_HANDLE}`,
     title: DEFAULT_TITLE,
     description: DEFAULT_DESCRIPTION,
     images: [COMPANY.logo],

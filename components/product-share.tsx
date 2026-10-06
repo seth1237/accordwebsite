@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Check, Copy, Share2 } from 'lucide-react'
+import { ShareDestinations } from '@/components/share-destinations'
 import type { CatalogProduct } from '@/lib/catalog'
 import { COMPANY } from '@/lib/utils'
 
@@ -54,11 +55,6 @@ export function ProductShare({ product }: { product: CatalogProduct }) {
     setTimeout(() => setCopied(false), 1600)
   }
 
-  async function shareWhatsApp() {
-    await recordShare()
-    window.open(`https://wa.me/?text=${encodeURIComponent(`${shareText()} ${shareUrl()}`)}`, '_blank', 'noopener,noreferrer')
-  }
-
   return (
     <div className="share-wrap">
       <button type="button" className="button button-outline button-compact share-button" onClick={() => void nativeShare()}>
@@ -71,7 +67,7 @@ export function ProductShare({ product }: { product: CatalogProduct }) {
             {copied ? <Check size={14} /> : <Copy size={14} />}
             {copied ? 'Copied' : 'Copy link'}
           </button>
-          <button type="button" onClick={() => void shareWhatsApp()}>WhatsApp</button>
+          <ShareDestinations url={shareUrl()} text={shareText()} onShare={recordShare} />
         </div>
       )}
     </div>

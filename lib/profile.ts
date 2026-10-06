@@ -1,4 +1,5 @@
 import type { CompanyProfilePage } from '@/lib/content'
+import { SOCIAL_LINKS } from '@/lib/socials'
 import { COMPANY } from '@/lib/utils'
 
 export function defaultCompanyProfilePages(): CompanyProfilePage[] {
@@ -36,7 +37,7 @@ export function defaultCompanyProfilePages(): CompanyProfilePage[] {
     {
       _id: 'reach',
       title: 'Talk to us',
-      body: `${COMPANY.hours}\n${COMPANY.email}\n${COMPANY.salesEmail}\n${COMPANY.phone}\n${COMPANY.phoneSecondary}`,
+      body: `${COMPANY.hours}\n${COMPANY.email}\n${COMPANY.salesEmail}\n${COMPANY.phone}\n${COMPANY.phoneSecondary}\n${SOCIAL_LINKS.map((item) => item.href).join('\n')}`,
       image: null,
       order: 4,
       published: true,
