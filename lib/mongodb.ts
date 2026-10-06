@@ -540,7 +540,7 @@ export async function recordSiteVisit(input: { visitorId: string; path: string }
 export async function getVisitorStats(days = 90) {
   if (isMysqlConfigured()) return mysqlGetVisitorStats(days)
   return {
-    today: { date: new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' }), visitors: 0, pageviews: 0 },
+    today: { date: new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' }), visitors: 0, pageviews: 0, newVisitors: 0 },
     days: [],
   }
 }

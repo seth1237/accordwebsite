@@ -227,7 +227,7 @@ export async function getCategoryPerformance() {
 export async function getVisitorStats() {
   const payload = await backendJson<{ data: Awaited<ReturnType<typeof import('@/lib/mongodb').getVisitorStats>> }>('/api/admin/visitors')
   return payload?.data || {
-    today: { date: '', visitors: 0, pageviews: 0 },
+    today: { date: '', visitors: 0, pageviews: 0, newVisitors: 0 },
     days: [],
   }
 }

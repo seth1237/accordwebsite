@@ -1453,6 +1453,7 @@ export type VisitorDay = {
   date: string
   visitors: number
   pageviews: number
+  newVisitors: number
 }
 
 function mapVisitRows(rows: RowDataPacket[]): VisitorDay[] {
@@ -1460,26 +1461,45 @@ function mapVisitRows(rows: RowDataPacket[]): VisitorDay[] {
     date: String(row.visit_date || row.bucket),
     visitors: Number(row.visitors) || 0,
     pageviews: Number(row.pageviews) || 0,
+    newVisitors: Number(row.new_visitors) || 0,
   }))
 }
+
+function mergeNewVisitors(points: VisitorDay[], newRows: VisitorDay[]) {
+  const byDate = new Map(newRows.map((row) => [row.date, row.newVisitors]))
+  return points.map((point) => ({ ...point, newVisitors: byDate.get(point.date) || point.newVisitors || 0 }))
+}
+
+const FIRST_SEEN = `SELECT visitor_id, MIN(visit_date) AS visit_date FROM accord_nx_site_visits GROUP BY visitor_id`
 
 export async function mysqlGetVisitorStats(days = 90): Promise<{ today: VisitorDay; days: VisitorDay[] }> {
   await ensureMysqlSchema()
   const pool = await getPool()
   const today = nairobiDate()
-  const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT DATE_FORMAT(visit_date, '%Y-%m-%d') AS visit_date,
-            COUNT(DISTINCT visitor_id) AS visitors,
-            SUM(hits) AS pageviews
-     FROM accord_nx_site_visits
-     WHERE visit_date >= DATE_SUB(?, INTERVAL ? DAY)
-     GROUP BY visit_date
-     ORDER BY visit_date DESC`,
-    [today, Math.max(1, Math.min(365, days))],
-  )
-  const list = mapVisitRows(rows)
+  const span = Math.max(1, Math.min(365, days))
+  const [rows, newRows] = await Promise.all([
+    pool.query<RowDataPacket[]>(
+      `SELECT DATE_FORMAT(visit_date, '%Y-%m-%d') AS visit_date,
+              COUNT(DISTINCT visitor_id) AS visitors,
+              SUM(hits) AS pageviews
+       FROM accord_nx_site_visits
+       WHERE visit_date >= DATE_SUB(?, INTERVAL ? DAY)
+       GROUP BY visit_date
+       ORDER BY visit_date DESC`,
+      [today, span],
+    ),
+    pool.query<RowDataPacket[]>(
+      `SELECT DATE_FORMAT(visit_date, '%Y-%m-%d') AS visit_date,
+              COUNT(*) AS new_visitors
+       FROM (${FIRST_SEEN}) firsts
+       WHERE visit_date >= DATE_SUB(?, INTERVAL ? DAY)
+       GROUP BY visit_date`,
+      [today, span],
+    ),
+  ])
+  const list = mergeNewVisitors(mapVisitRows(rows[0]), mapVisitRows(newRows[0]))
   return {
-    today: list.find((row) => row.date === today) || { date: today, visitors: 0, pageviews: 0 },
+    today: list.find((row) => row.date === today) || { date: today, visitors: 0, pageviews: 0, newVisitors: 0 },
     days: list,
   }
 }
@@ -1500,7 +1520,7 @@ export async function mysqlGetVisitorReport(input: { period?: unknown; from?: un
 
   await ensureMysqlSchema()
   const pool = await getPool()
-  const [seriesRows, totalRows, todayRows] = await Promise.all([
+  const [seriesRows, newSeriesRows, totalRows, newTotalRows, todayRows, todayNewRows] = await Promise.all([
     pool.query<RowDataPacket[]>(
       `SELECT ${bucket} AS bucket,
               COUNT(DISTINCT visitor_id) AS visitors,
@@ -1512,8 +1532,21 @@ export async function mysqlGetVisitorReport(input: { period?: unknown; from?: un
       [range.from, range.to],
     ),
     pool.query<RowDataPacket[]>(
+      `SELECT ${bucket} AS bucket, COUNT(*) AS new_visitors
+       FROM (${FIRST_SEEN}) firsts
+       WHERE visit_date BETWEEN ? AND ?
+       GROUP BY ${bucket}`,
+      [range.from, range.to],
+    ),
+    pool.query<RowDataPacket[]>(
       `SELECT COUNT(DISTINCT visitor_id) AS visitors, COALESCE(SUM(hits), 0) AS pageviews
        FROM accord_nx_site_visits
+       WHERE visit_date BETWEEN ? AND ?`,
+      [range.from, range.to],
+    ),
+    pool.query<RowDataPacket[]>(
+      `SELECT COUNT(*) AS new_visitors
+       FROM (${FIRST_SEEN}) firsts
        WHERE visit_date BETWEEN ? AND ?`,
       [range.from, range.to],
     ),
@@ -1526,10 +1559,24 @@ export async function mysqlGetVisitorReport(input: { period?: unknown; from?: un
        GROUP BY visit_date`,
       [today],
     ),
+    pool.query<RowDataPacket[]>(
+      `SELECT DATE_FORMAT(visit_date, '%Y-%m-%d') AS visit_date, COUNT(*) AS new_visitors
+       FROM (${FIRST_SEEN}) firsts
+       WHERE visit_date = ?
+       GROUP BY visit_date`,
+      [today],
+    ),
   ])
 
-  const todayPoint = mapVisitRows(todayRows[0])[0] || { date: today, visitors: 0, pageviews: 0 }
+  const todayPoint = mergeNewVisitors(mapVisitRows(todayRows[0]), mapVisitRows(todayNewRows[0]))[0]
+    || { date: today, visitors: 0, pageviews: 0, newVisitors: 0 }
   const totalsRow = totalRows[0][0]
+  const series = fillVisitorSeries(
+    period,
+    seriesFrom,
+    range.to,
+    mergeNewVisitors(mapVisitRows(seriesRows[0]), mapVisitRows(newSeriesRows[0])),
+  )
   return {
     period,
     from: range.from,
@@ -1538,8 +1585,9 @@ export async function mysqlGetVisitorReport(input: { period?: unknown; from?: un
     totals: {
       visitors: Number(totalsRow?.visitors) || 0,
       pageviews: Number(totalsRow?.pageviews) || 0,
+      newVisitors: Number(newTotalRows[0][0]?.new_visitors) || 0,
     },
-    series: fillVisitorSeries(period, seriesFrom, range.to, mapVisitRows(seriesRows[0])),
+    series,
   }
 }
 

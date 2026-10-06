@@ -928,7 +928,7 @@ app.get('/api/admin/visitors', async (c) => {
       if (period || from || to) {
         return c.json({ success: true, data: emptyVisitorReport(parsePeriod(period)) })
       }
-      return c.json({ success: true, data: { today: { date: '', visitors: 0, pageviews: 0 }, days: [] } })
+        return c.json({ success: true, data: { today: { date: '', visitors: 0, pageviews: 0, newVisitors: 0 }, days: [] } })
     }
     throw error
   }

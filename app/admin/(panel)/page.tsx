@@ -6,7 +6,7 @@ export default async function AdminOverviewPage() {
   const [catalog, categoryPerformance, visitors] = await Promise.all([
     getCatalog(),
     getCategoryPerformance().catch(() => []),
-    getVisitorStats().catch(() => ({ today: { date: '', visitors: 0, pageviews: 0 }, days: [] })),
+    getVisitorStats().catch(() => ({ today: { date: '', visitors: 0, pageviews: 0, newVisitors: 0 }, days: [] })),
   ])
   const totalClicks = catalog.products.reduce((sum, product) => sum + (product.clicks || 0), 0)
   const totalShares = catalog.products.reduce((sum, product) => sum + (product.shares || 0), 0)
@@ -35,7 +35,7 @@ export default async function AdminOverviewPage() {
       </header>
       <div className="admin-stats">
         <div><Package /><span><b>{catalog.products.length}</b><small>ERP products</small></span></div>
-        <div><Eye /><span><b>{visitors.today.visitors}</b><small>Visitors today</small></span></div>
+        <div><Eye /><span><b>{visitors.today.pageviews || 0}</b><small>Page views today</small></span></div>
         <div><MousePointerClick /><span><b>{totalClicks}</b><small>Clicks</small></span></div>
         <div><Share2 /><span><b>{totalShares}</b><small>Shares</small></span></div>
       </div>

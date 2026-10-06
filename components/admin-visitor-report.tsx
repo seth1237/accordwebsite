@@ -3,11 +3,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   defaultRange,
+  emptyVisitorTotals,
   fillVisitorSeries,
   kenyaToday,
   monthStart,
+  returningVisitors,
   visitorLabel,
+  visitorMetricValue,
   weekStart,
+  type VisitorChartMetric,
   type VisitorPeriod,
   type VisitorPoint,
   type VisitorReport,
@@ -17,6 +21,11 @@ const PERIODS: { id: VisitorPeriod; label: string }[] = [
   { id: 'daily', label: 'Daily' },
   { id: 'weekly', label: 'Weekly' },
   { id: 'monthly', label: 'Monthly' },
+]
+
+const CHART_METRICS: { id: VisitorChartMetric; label: string }[] = [
+  { id: 'pageviews', label: 'Page views' },
+  { id: 'visitors', label: 'Visitors' },
 ]
 
 function formatCount(value: number) {
@@ -43,19 +52,27 @@ function labelIndexes(count: number, maxLabels = 6) {
   return [...marks].sort((a, b) => a - b)
 }
 
-function VisitorChart({ period, series }: { period: VisitorPeriod; series: VisitorPoint[] }) {
+function VisitorChart({
+  period,
+  series,
+  metric,
+}: {
+  period: VisitorPeriod
+  series: VisitorPoint[]
+  metric: VisitorChartMetric
+}) {
   const [hover, setHover] = useState<number | null>(null)
   const width = 720
   const height = 228
   const pad = { left: 40, right: 14, top: 18, bottom: 34 }
   const innerWidth = width - pad.left - pad.right
   const innerHeight = height - pad.top - pad.bottom
-  const max = niceMax(Math.max(0, ...series.map((point) => point.visitors)))
+  const max = niceMax(Math.max(0, ...series.map((point) => visitorMetricValue(point, metric))))
   const count = series.length
   const xAt = (index: number) => pad.left + (count <= 1 ? innerWidth / 2 : (index / (count - 1)) * innerWidth)
   const yAt = (value: number) => pad.top + innerHeight - (value / max) * innerHeight
   const ticks = [0, max / 2, max]
-  const line = series.map((point, index) => `${index === 0 ? 'M' : 'L'}${xAt(index)} ${yAt(point.visitors)}`).join(' ')
+  const line = series.map((point, index) => `${index === 0 ? 'M' : 'L'}${xAt(index)} ${yAt(visitorMetricValue(point, metric))}`).join(' ')
   const area = count
     ? `${line} L${xAt(count - 1)} ${yAt(0)} L${xAt(0)} ${yAt(0)} Z`
     : ''
@@ -81,7 +98,7 @@ function VisitorChart({ period, series }: { period: VisitorPeriod; series: Visit
       <svg
         viewBox={`0 0 ${width} ${height}`}
         role="img"
-        aria-label="Visitors over time"
+        aria-label={`${metric === 'visitors' ? 'Visitors' : 'Page views'} over time`}
         onMouseLeave={() => setHover(null)}
         onMouseMove={(event) => setHover(nearestIndex(event.clientX, event.currentTarget))}
       >
@@ -94,7 +111,7 @@ function VisitorChart({ period, series }: { period: VisitorPeriod; series: Visit
         {area && <path className="visitor-area" d={area} />}
         {line && <path className="visitor-line" d={line} />}
         {count <= 24 && series.map((point, index) => (
-          <circle key={point.date} className="visitor-dot" cx={xAt(index)} cy={yAt(point.visitors)} r={hover === index ? 4.5 : 3} />
+          <circle key={point.date} className="visitor-dot" cx={xAt(index)} cy={yAt(visitorMetricValue(point, metric))} r={hover === index ? 4.5 : 3} />
         ))}
         {labelIndexes(count).map((index) => {
           const isFirst = index === 0
@@ -118,8 +135,9 @@ function VisitorChart({ period, series }: { period: VisitorPeriod; series: Visit
       {active && hover != null && (
         <div className="visitor-tip" style={{ left: `${(xAt(hover) / width) * 100}%` }}>
           <b>{visitorLabel(period, active.date)}</b>
-          <span>{formatCount(active.visitors)} visitors</span>
           <span>{formatCount(active.pageviews)} page views</span>
+          <span>{formatCount(active.visitors)} visitors</span>
+          <span>{formatCount(active.newVisitors)} new · {formatCount(returningVisitors(active))} returning</span>
         </div>
       )}
     </div>
@@ -128,6 +146,7 @@ function VisitorChart({ period, series }: { period: VisitorPeriod; series: Visit
 
 export function AdminVisitorReport({ initial }: { initial: VisitorReport }) {
   const [period, setPeriod] = useState<VisitorPeriod>(initial.period)
+  const [metric, setMetric] = useState<VisitorChartMetric>('pageviews')
   const [from, setFrom] = useState(initial.from)
   const [to, setTo] = useState(initial.to)
   const [report, setReport] = useState(initial)
@@ -159,10 +178,15 @@ export function AdminVisitorReport({ initial }: { initial: VisitorReport }) {
   }, [period, from, to])
 
   const peak = useMemo(() => {
-    return report.series.reduce((best, point) => (point.visitors > best.visitors ? point : best), report.series[0] || { date: '', visitors: 0, pageviews: 0 })
-  }, [report.series])
+    return report.series.reduce(
+      (best, point) => (visitorMetricValue(point, metric) > visitorMetricValue(best, metric) ? point : best),
+      report.series[0] || { date: '', visitors: 0, pageviews: 0, newVisitors: 0 },
+    )
+  }, [report.series, metric])
   const today = kenyaToday()
   const hasTraffic = report.series.some((point) => point.visitors || point.pageviews)
+  const peakValue = visitorMetricValue(peak, metric)
+  const peakUnit = metric === 'visitors' ? 'visitors' : 'page views'
 
   function choosePeriod(next: VisitorPeriod) {
     const range = defaultRange(next)
@@ -174,7 +198,7 @@ export function AdminVisitorReport({ initial }: { initial: VisitorReport }) {
       period: next,
       from: range.from,
       to: range.to,
-      totals: { visitors: 0, pageviews: 0 },
+      totals: emptyVisitorTotals(),
       series: placeholderSeries(next, range.from, range.to),
     }))
   }
@@ -183,23 +207,38 @@ export function AdminVisitorReport({ initial }: { initial: VisitorReport }) {
     <section id="visitors" className="admin-card visitor-report">
       <div className="card-title">
         <div>
-          <h3>Visitors</h3>
-          <span>Unique browsers, counted once per day. Kenya time.</span>
+          <h3>Traffic</h3>
+          <span>Every page load is a page view. New visitors are first-time browsers. Kenya time.</span>
         </div>
       </div>
       <div className="visitor-toolbar">
-        <div className="visitor-periods" role="group" aria-label="Report period">
-          {PERIODS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={period === item.id ? 'is-on' : ''}
-              aria-pressed={period === item.id}
-              onClick={() => choosePeriod(item.id)}
-            >
-              {item.label}
-            </button>
-          ))}
+        <div className="visitor-toolbar-groups">
+          <div className="visitor-periods" role="group" aria-label="Report period">
+            {PERIODS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={period === item.id ? 'is-on' : ''}
+                aria-pressed={period === item.id}
+                onClick={() => choosePeriod(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <div className="visitor-periods" role="group" aria-label="Chart metric">
+            {CHART_METRICS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={metric === item.id ? 'is-on' : ''}
+                aria-pressed={metric === item.id}
+                onClick={() => setMetric(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="visitor-range">
           <label>
@@ -214,35 +253,47 @@ export function AdminVisitorReport({ initial }: { initial: VisitorReport }) {
       </div>
       <div className={`visitor-kpis${loading ? ' is-loading' : ''}`}>
         <div>
-          <b>{formatCount(report.totals.visitors)}</b>
-          <small>Unique visitors</small>
-        </div>
-        <div>
           <b>{formatCount(report.totals.pageviews)}</b>
           <small>Page views</small>
         </div>
         <div>
-          <b>{formatCount(peak.visitors)}</b>
-          <small>Peak {report.period === 'monthly' ? 'month' : report.period === 'weekly' ? 'week' : 'day'}{peak.visitors && peak.date ? ` · ${visitorLabel(report.period, peak.date)}` : ''}</small>
+          <b>{formatCount(report.totals.visitors)}</b>
+          <small>Visitors</small>
+        </div>
+        <div>
+          <b>{formatCount(report.totals.newVisitors)}</b>
+          <small>New visitors</small>
+        </div>
+        <div>
+          <b>{formatCount(returningVisitors(report.totals))}</b>
+          <small>Returning visitors</small>
         </div>
       </div>
-      <VisitorChart period={report.period} series={report.series} />
+      <p className="visitor-chart-caption">
+        Chart shows {metric === 'visitors' ? 'unique visitors' : 'total page views'}
+        {peakValue && peak.date ? ` · peak ${formatCount(peakValue)} ${peakUnit} on ${visitorLabel(report.period, peak.date)}` : ''}
+      </p>
+      <VisitorChart period={report.period} series={report.series} metric={metric} />
       {!hasTraffic && <p className="visitor-empty">No visits in this range yet.</p>}
       <div className="visitor-table-wrap">
         <table className="visitor-table">
           <thead>
             <tr>
               <th>{report.period === 'monthly' ? 'Month' : report.period === 'weekly' ? 'Week' : 'Date'}</th>
-              <th>Visitors</th>
               <th>Page views</th>
+              <th>Visitors</th>
+              <th>New</th>
+              <th>Returning</th>
             </tr>
           </thead>
           <tbody>
             {[...report.series].reverse().map((row) => (
               <tr key={row.date}>
                 <td>{visitorLabel(report.period, row.date)}</td>
-                <td>{formatCount(row.visitors)}</td>
                 <td>{formatCount(row.pageviews)}</td>
+                <td>{formatCount(row.visitors)}</td>
+                <td>{formatCount(row.newVisitors)}</td>
+                <td>{formatCount(returningVisitors(row))}</td>
               </tr>
             ))}
           </tbody>

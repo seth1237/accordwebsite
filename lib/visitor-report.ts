@@ -4,6 +4,13 @@ export type VisitorPoint = {
   date: string
   visitors: number
   pageviews: number
+  newVisitors: number
+}
+
+export type VisitorTotals = {
+  visitors: number
+  pageviews: number
+  newVisitors: number
 }
 
 export type VisitorReport = {
@@ -11,8 +18,26 @@ export type VisitorReport = {
   from: string
   to: string
   today: VisitorPoint
-  totals: { visitors: number; pageviews: number }
+  totals: VisitorTotals
   series: VisitorPoint[]
+}
+
+export type VisitorChartMetric = 'pageviews' | 'visitors'
+
+export function emptyVisitorPoint(date: string): VisitorPoint {
+  return { date, visitors: 0, pageviews: 0, newVisitors: 0 }
+}
+
+export function emptyVisitorTotals(): VisitorTotals {
+  return { visitors: 0, pageviews: 0, newVisitors: 0 }
+}
+
+export function returningVisitors(point: { visitors: number; newVisitors: number }) {
+  return Math.max(0, point.visitors - point.newVisitors)
+}
+
+export function visitorMetricValue(point: VisitorPoint, metric: VisitorChartMetric) {
+  return metric === 'visitors' ? point.visitors : point.pageviews
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/
@@ -85,13 +110,18 @@ export function parsePeriod(value: unknown): VisitorPeriod {
 }
 
 export function fillVisitorSeries(period: VisitorPeriod, from: string, to: string, rows: VisitorPoint[]): VisitorPoint[] {
-  const byDate = new Map(rows.map((row) => [row.date, row]))
+  const byDate = new Map(rows.map((row) => [row.date, {
+    date: row.date,
+    visitors: Number(row.visitors) || 0,
+    pageviews: Number(row.pageviews) || 0,
+    newVisitors: Number(row.newVisitors) || 0,
+  }]))
   const series: VisitorPoint[] = []
   if (period === 'monthly') {
     let cursor = monthStart(from)
     const last = monthStart(to)
     while (cursor <= last) {
-      series.push(byDate.get(cursor) || { date: cursor, visitors: 0, pageviews: 0 })
+      series.push(byDate.get(cursor) || emptyVisitorPoint(cursor))
       const next = parseKenya(cursor)
       next.setMonth(next.getMonth() + 1)
       cursor = kenyaDate(next)
@@ -102,14 +132,14 @@ export function fillVisitorSeries(period: VisitorPeriod, from: string, to: strin
     let cursor = weekStart(from)
     const last = weekStart(to)
     while (cursor <= last) {
-      series.push(byDate.get(cursor) || { date: cursor, visitors: 0, pageviews: 0 })
+      series.push(byDate.get(cursor) || emptyVisitorPoint(cursor))
       cursor = addKenyaDays(cursor, 7)
     }
     return series
   }
   let cursor = from
   while (cursor <= to) {
-    series.push(byDate.get(cursor) || { date: cursor, visitors: 0, pageviews: 0 })
+    series.push(byDate.get(cursor) || emptyVisitorPoint(cursor))
     cursor = addKenyaDays(cursor, 1)
   }
   return series
@@ -135,8 +165,8 @@ export function emptyVisitorReport(period: VisitorPeriod = 'daily'): VisitorRepo
     period,
     from: range.from,
     to: range.to,
-    today: { date: today, visitors: 0, pageviews: 0 },
-    totals: { visitors: 0, pageviews: 0 },
+    today: emptyVisitorPoint(today),
+    totals: emptyVisitorTotals(),
     series: fillVisitorSeries(period, range.from, range.to, []),
   }
 }

@@ -1,4 +1,4 @@
-import { BarChart3, MousePointerClick, Share2, Users } from 'lucide-react'
+import { Eye, MousePointerClick, Plus, Users } from 'lucide-react'
 import { AdminVisitorReport } from '@/components/admin-visitor-report'
 import { getCatalog, getCategoryPerformance, getVisitorReport } from '@/lib/site-data'
 import { formatKes, productImageSrc } from '@/lib/catalog'
@@ -36,10 +36,10 @@ export default async function AdminPerformancePage() {
         </div>
       </header>
       <div className="admin-stats">
+        <div><Eye /><span><b>{visitors.today.pageviews}</b><small>Page views today</small></span></div>
         <div><Users /><span><b>{visitors.today.visitors}</b><small>Visitors today</small></span></div>
+        <div><Plus /><span><b>{visitors.today.newVisitors}</b><small>New visitors today</small></span></div>
         <div><MousePointerClick /><span><b>{totalClicks}</b><small>Product clicks</small></span></div>
-        <div><Share2 /><span><b>{totalShares}</b><small>Shares</small></span></div>
-        <div><BarChart3 /><span><b>{categoryStats.length}</b><small>Categories</small></span></div>
       </div>
       <AdminVisitorReport initial={visitors} />
       <div className="admin-card category-metrics">
