@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { JsonLd } from '@/components/json-ld'
 import { AppProviders } from '@/components/app-providers'
+import { Metricool } from '@/components/metricool'
 import { DEFAULT_DESCRIPTION, DEFAULT_TITLE, organizationJsonLd } from '@/lib/seo'
 import { COMPANY } from '@/lib/utils'
 
@@ -54,7 +55,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <JsonLd data={organizationJsonLd()} />
         <AppProviders>
           {children}
-          {process.env.NODE_ENV === 'production' && <Analytics />}
+          {process.env.NODE_ENV === 'production' && (
+            <>
+              <Analytics />
+              <Metricool />
+            </>
+          )}
         </AppProviders>
       </body>
     </html>
