@@ -6,11 +6,17 @@ export type { BreadcrumbCrumb }
 
 export const HOME_CRUMB: BreadcrumbCrumb = { name: 'Home', path: '/' }
 
-export function Breadcrumbs({ items }: { items: BreadcrumbCrumb[] }) {
+export function Breadcrumbs({
+  items,
+  includeJsonLd = true,
+}: {
+  items: BreadcrumbCrumb[]
+  includeJsonLd?: boolean
+}) {
   if (items.length < 2) return null
   return (
     <>
-      <JsonLd data={breadcrumbJsonLd(items)} />
+      {includeJsonLd ? <JsonLd data={breadcrumbJsonLd(items)} /> : null}
       <nav className="product-breadcrumb" aria-label="Breadcrumb">
         <ol>
           {items.map((crumb, index) => {

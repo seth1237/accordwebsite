@@ -340,8 +340,13 @@ export function productHref(product: Pick<CatalogProduct, 'slug' | 'id'>) {
 }
 
 export function categoryHref(category: { slug?: string; name?: string; id?: string; _id?: string }) {
-  const slug = category.slug || publicCategorySlug(category.name || '') || category.id || category._id || 'uncategorized'
+  const raw = String(category.slug || category.name || category.id || category._id || 'uncategorized')
+  const slug = resolveCategorySlug(publicCategorySlug(raw))
   return `/category/${slug}`
+}
+
+export function productCategoryHref(product: Pick<CatalogProduct, 'categoryId' | 'categoryName'>) {
+  return categoryHref({ slug: publicCategorySlug(product.categoryName || product.categoryId), name: product.categoryName })
 }
 
 export function assignCategorySlugs<T extends { _id: string; name: string; slug?: string }>(categories: T[]): Array<T & { slug: string }> {

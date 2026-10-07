@@ -8,10 +8,10 @@ import { ProductGallery } from '@/components/product-gallery'
 import { TrackProductClick } from '@/components/track-product-click'
 import { RelatedProducts } from '@/components/related-products'
 import { JsonLd } from '@/components/json-ld'
-import { Breadcrumbs, HOME_CRUMB } from '@/components/breadcrumbs'
-import { categoryHref, displayPrice, productHref } from '@/lib/catalog'
+import { Breadcrumbs } from '@/components/breadcrumbs'
+import { displayPrice, productHref } from '@/lib/catalog'
 import { catalogueDownloadHref } from '@/lib/content'
-import { pageMetadata, productJsonLd, productMetaDescription } from '@/lib/seo'
+import { pageMetadata, productBreadcrumbItems, productMetaDescription, productPageJsonLd } from '@/lib/seo'
 import { seoKeywordsList } from '@/lib/seo-fields'
 import { getCatalogProduct, getPriceVisibility, getRelatedProducts, listCatalogues } from '@/lib/site-data'
 import { COMPANY } from '@/lib/utils'
@@ -49,11 +49,11 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const catalogueHref = catalogueDownloadHref(product, catalogues)
   const revealPrice = showPrices && (!product.onOffer || product.offerShowPrice !== false)
   const priceLabel = displayPrice(product, revealPrice)
-  const categoryPath = categoryHref({ slug: product.categoryId, name: product.categoryName })
+  const crumbs = productBreadcrumbItems(product)
 
   return (
     <main className="min-h-screen">
-      <JsonLd data={productJsonLd(product, revealPrice)} />
+      <JsonLd data={productPageJsonLd(product, revealPrice)} />
       <TrackProductClick
         productId={product.id}
         productName={product.name}
@@ -64,14 +64,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       <SiteHeader />
       <section className="section product-page">
         <div className="shell">
-          <Breadcrumbs
-            items={[
-              HOME_CRUMB,
-              { name: 'Products', path: '/products' },
-              { name: product.categoryName, path: categoryPath },
-              { name: product.name, path: productHref(product) },
-            ]}
-          />
+          <Breadcrumbs items={crumbs} includeJsonLd={false} />
           <div className="product-stage">
             <div className="product-detail-grid">
               <ProductGallery product={product} />

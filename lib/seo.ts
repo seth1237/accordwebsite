@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
-import { categoryHref, productHref, type CatalogProduct } from '@/lib/catalog'
+import { categoryHref, productCategoryHref, productHref, type CatalogProduct } from '@/lib/catalog'
+import { ROUTES } from '@/lib/routes'
 import { socialProfileUrls, TWITTER_HANDLE } from '@/lib/socials'
 import { COMPANY } from '@/lib/utils'
 
@@ -224,49 +225,92 @@ export function productImageAlt(product: Pick<CatalogProduct, 'name' | 'category
 
 export type BreadcrumbCrumb = { name: string; path: string }
 
-/** Google BreadcrumbList: last ListItem omits `item`; Google uses the page URL. */
+function breadcrumbItemUrl(path: string) {
+  return path === '/' ? `${COMPANY.url}/` : absoluteUrl(path)
+}
+
+function withoutContext<T extends Record<string, unknown>>(node: T) {
+  const { '@context': _context, ...rest } = node
+  return rest
+}
+
+/** Visible trail and JSON-LD share this path: Home › Products › category › product. */
+export function productBreadcrumbItems(
+  product: Pick<CatalogProduct, 'name' | 'slug' | 'id' | 'categoryId' | 'categoryName'>,
+): BreadcrumbCrumb[] {
+  const crumbs: BreadcrumbCrumb[] = [
+    { name: 'Home', path: '/' },
+    { name: 'Products', path: ROUTES.products },
+  ]
+  if (product.categoryName) {
+    crumbs.push({ name: product.categoryName, path: productCategoryHref(product) })
+  }
+  crumbs.push({ name: product.name, path: productHref(product) })
+  return crumbs
+}
+
 export function breadcrumbJsonLd(items: BreadcrumbCrumb[]) {
   return {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
-    itemListElement: items.map((crumb, index) => {
-      const entry: Record<string, unknown> = {
-        '@type': 'ListItem',
-        position: index + 1,
-        name: crumb.name,
-      }
-      if (index < items.length - 1) entry.item = absoluteUrl(crumb.path)
-      return entry
-    }),
+    itemListElement: items.map((crumb, index) => ({
+      '@type': 'ListItem',
+      position: index + 1,
+      name: crumb.name,
+      item: breadcrumbItemUrl(crumb.path),
+    })),
   }
 }
 
 export function productJsonLd(product: CatalogProduct, showPrices: boolean) {
   const url = absoluteUrl(productHref(product))
   const images = (product.images.length ? product.images : [product.image]).filter(Boolean) as string[]
+  const imageUrls = (images.length ? images : [COMPANY.logo]).map((src) => (src.startsWith('http') ? src : absoluteUrl(src)))
   const offer: Record<string, unknown> = {
     '@type': 'Offer',
     url,
     priceCurrency: 'KES',
     availability: product.inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-    seller: { '@id': `${COMPANY.url}/#organization` },
+    seller: {
+      '@type': 'Organization',
+      '@id': `${COMPANY.url}/#organization`,
+      name: COMPANY.name,
+      url: COMPANY.url,
+    },
     itemCondition: 'https://schema.org/NewCondition',
   }
   if (showPrices && product.price > 0) offer.price = product.price
-  return {
+  const node: Record<string, unknown> = {
     '@context': 'https://schema.org',
     '@type': 'Product',
+    '@id': `${url}#product`,
     name: product.name,
     description: productMetaDescription(product),
     sku: product.id,
-    image: images.map((src) => (src.startsWith('http') ? src : absoluteUrl(src))),
+    image: imageUrls,
     brand: {
       '@type': 'Brand',
       name: product.manufacturer || COMPANY.name,
     },
-    category: product.categoryName,
     url,
+    mainEntityOfPage: url,
     offers: offer,
+  }
+  if (product.categoryName) node.category = product.categoryName
+  if (product.manufacturer) {
+    node.manufacturer = { '@type': 'Organization', name: product.manufacturer }
+  }
+  return node
+}
+
+/** Product template graph. Organization / LocalBusiness is emitted once in the root layout. */
+export function productPageJsonLd(product: CatalogProduct, showPrices: boolean) {
+  return {
+    '@context': 'https://schema.org',
+    '@graph': [
+      withoutContext(productJsonLd(product, showPrices)),
+      withoutContext(breadcrumbJsonLd(productBreadcrumbItems(product))),
+    ],
   }
 }
 
