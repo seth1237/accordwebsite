@@ -6,6 +6,7 @@ import {
   mergeCatalogCategories,
   mergeOverlay,
   publicCategorySlug,
+  stripHtml,
   type Catalog,
   type CatalogCategory,
   type CatalogProduct,
@@ -18,11 +19,15 @@ import {
   mysqlCreateCatalogProduct,
   mysqlCreateCategory,
   mysqlEnsureCategory,
+  mysqlFindCatalogProductByName,
   mysqlListCategories,
   mysqlListCatalogProducts,
   mysqlListDocs,
   mysqlSetLocalCatalogReady,
+  mysqlUpdateCatalogProduct,
+  mysqlUpdateProductDetails,
 } from '@/lib/mysql'
+import { featuresToHtml, parseProductCsv, type ProductCsvImportResult } from '@/lib/product-csv'
 
 async function loadRawProducts(): Promise<CatalogProduct[]> {
   if (!isMysqlConfigured()) return []
@@ -218,4 +223,84 @@ export async function createCatalogProduct(input: {
   await mysqlSetLocalCatalogReady(true).catch(() => null)
   await invalidateCatalog()
   return product
+}
+
+export async function updateCatalogProduct(
+  id: string,
+  updates: { name?: string; details?: string; distributedFor?: string; description?: string },
+) {
+  if (!isMysqlConfigured()) throw new Error('MySQL is not configured')
+  const product = await mysqlUpdateCatalogProduct(id, {
+    name: updates.name,
+    details: updates.details,
+    description: updates.description,
+  })
+  if (!product) throw new Error('Product not found')
+  if (updates.details !== undefined || updates.distributedFor !== undefined) {
+    await mysqlUpdateProductDetails(product.id, updates.details ?? product.details ?? '', {
+      distributedFor: updates.distributedFor,
+    })
+  }
+  await invalidateCatalog()
+  return product
+}
+
+export async function importProductsFromCsv(csvText: string): Promise<ProductCsvImportResult> {
+  if (!isMysqlConfigured()) throw new Error('MySQL is not configured')
+  const rows = parseProductCsv(csvText)
+  const result: ProductCsvImportResult = { created: 0, updated: 0, skipped: 0, errors: [] }
+  if (!rows.length) {
+    result.errors.push('The CSV has no product rows. Use columns: Product name, category, PRODUCT FEATURE, price.')
+    return result
+  }
+  for (const row of rows) {
+    if (!row.name) {
+      result.skipped += 1
+      result.errors.push(`Line ${row.line}: product name is required`)
+      continue
+    }
+    if (!row.category) {
+      result.skipped += 1
+      result.errors.push(`Line ${row.line}: category is required for ${row.name}`)
+      continue
+    }
+    try {
+      const details = featuresToHtml(row.features)
+      const description = stripHtml(row.features).slice(0, 400)
+      const existing =
+        (await mysqlFindCatalogProductByName(row.name, row.category)) || (await mysqlFindCatalogProductByName(row.name))
+      if (existing) {
+        const next: { name: string; categoryId?: string; categoryName: string; details?: string; description?: string; price?: number } = {
+          name: row.name,
+          categoryName: row.category,
+        }
+        const category = await mysqlEnsureCategory({ name: row.category })
+        next.categoryId = category.slug
+        next.categoryName = category.name
+        if (details) {
+          next.details = details
+          next.description = description || existing.description
+        }
+        if (row.price !== undefined) next.price = row.price
+        await mysqlUpdateCatalogProduct(existing.id, next)
+        if (details) await mysqlUpdateProductDetails(existing.id, details)
+        result.updated += 1
+      } else {
+        await createCatalogProduct({
+          name: row.name,
+          categoryName: row.category,
+          details,
+          description,
+          price: row.price ?? 0,
+        })
+        result.created += 1
+      }
+    } catch (error) {
+      result.skipped += 1
+      result.errors.push(`Line ${row.line}: ${error instanceof Error ? error.message : 'could not save'} (${row.name})`)
+    }
+  }
+  await mysqlSetLocalCatalogReady(true).catch(() => null)
+  await invalidateCatalog()
+  return result
 }

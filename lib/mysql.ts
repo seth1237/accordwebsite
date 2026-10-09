@@ -1319,6 +1319,59 @@ export async function mysqlGetCatalogProduct(id: string) {
   return rows[0] ? mapCatalogProductRow(rows[0]) : null
 }
 
+export async function mysqlFindCatalogProductByName(name: string, categoryName?: string) {
+  const title = String(name || '').trim()
+  if (!title) return null
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const category = String(categoryName || '').trim()
+  const [rows] = category
+    ? await pool.query<CatalogProductRow[]>(
+        `SELECT id, slug, name, product_type, description, details, price, compare_at, manufacturer,
+                category_id, category_name, featured, in_stock, created_on, seo
+         FROM accord_nx_products WHERE LOWER(name) = LOWER(?) AND LOWER(category_name) = LOWER(?) LIMIT 1`,
+        [title, category],
+      )
+    : await pool.query<CatalogProductRow[]>(
+        `SELECT id, slug, name, product_type, description, details, price, compare_at, manufacturer,
+                category_id, category_name, featured, in_stock, created_on, seo
+         FROM accord_nx_products WHERE LOWER(name) = LOWER(?) LIMIT 1`,
+        [title],
+      )
+  return rows[0] ? mapCatalogProductRow(rows[0]) : null
+}
+
+export async function mysqlUpdateCatalogProduct(
+  id: string,
+  updates: {
+    name?: string
+    description?: string
+    details?: string
+    categoryId?: string
+    categoryName?: string
+    price?: number
+  },
+) {
+  const existing = await mysqlGetCatalogProduct(id)
+  if (!existing) throw new Error('Product not found')
+  const name = updates.name !== undefined ? String(updates.name).trim() : existing.name
+  if (!name) throw new Error('Enter a product name')
+  const description = updates.description !== undefined ? String(updates.description) : existing.description
+  const details = updates.details !== undefined ? String(updates.details) : existing.details
+  const categoryId = updates.categoryId || existing.categoryId
+  const categoryName = updates.categoryName || existing.categoryName
+  const price = updates.price !== undefined ? Number(updates.price) || 0 : existing.price
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  await pool.query(
+    `UPDATE accord_nx_products
+     SET name = ?, description = ?, details = ?, price = ?, category_id = ?, category_name = ?, updated_at = ?
+     WHERE id = ?`,
+    [name, description, details, price, categoryId, categoryName, new Date(), id],
+  )
+  return mysqlGetCatalogProduct(id)
+}
+
 export async function mysqlCreateCatalogProduct(input: {
   name: string
   description?: string

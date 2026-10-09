@@ -34,7 +34,7 @@ export function ManufacturerApplyForm() {
       <label>Email<input name="email" type="email" required /></label>
       <label>Phone<input name="phone" /></label>
       <label>Website<input name="website" type="url" placeholder="https://" /></label>
-      <label>Products of interest<textarea name="productsOfInterest" rows={4} placeholder="Lines, brands, or SKUs you want listed" /></label>
+      <label>Products of interest<textarea name="productsOfInterest" rows={4} placeholder="Lines, brands, or product names you want listed" /></label>
       <label>Notes<textarea name="notes" rows={4} /></label>
       <label>Brochure (PDF)<input name="brochure" type="file" accept="application/pdf,.pdf" /></label>
       <button className="button button-primary" disabled={status === 'sending'}>

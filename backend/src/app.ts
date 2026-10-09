@@ -5,7 +5,7 @@ import { bodyLimit } from 'hono/body-limit'
 import { z } from 'zod'
 import { ADMIN_COOKIE, adminCookieOptions, authenticateAdmin, createAdminSessionValue, parseAdminSessionValue } from '../../lib/auth-core'
 import { slugifyName } from '../../lib/catalog'
-import { createCatalogCategory, createCatalogProduct, getCatalog, getCatalogProduct, getPriceVisibility } from '../../lib/catalog-data'
+import { createCatalogCategory, createCatalogProduct, getCatalog, getCatalogProduct, getPriceVisibility, importProductsFromCsv, updateCatalogProduct } from '../../lib/catalog-data'
 import { csvIds } from '../../lib/content'
 import { isOfferLive, parseOfferProductPrices } from '../../lib/offers'
 import { parseSeo } from '../../lib/seo-fields'
@@ -91,6 +91,7 @@ import {
   mysqlGetFile,
 } from '../../lib/mysql'
 import { catalogImportStatus, importCatalogBatch } from '../../lib/catalog-import'
+import { PRODUCT_CSV_TEMPLATE, productsToExcelXml } from '../../lib/product-csv'
 import { deleteCloudinaryImage, isCloudinaryConfigured, uploadProductImage } from '../../lib/cloudinary'
 import { createERPQuote } from '../../lib/erp'
 import { COMPANY } from '../../lib/utils'
@@ -643,6 +644,77 @@ app.post('/api/admin/products', async (c) => {
     }
     invalidatePublicCatalog()
     return c.json({ success: true, data: product })
+  } catch (error) {
+    return c.json({ success: false, message: databaseErrorMessage(error) }, 400)
+  }
+})
+
+app.get('/api/admin/products/csv-template', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  return c.body(PRODUCT_CSV_TEMPLATE, 200, {
+    'Content-Type': 'text/csv; charset=utf-8',
+    'Content-Disposition': 'attachment; filename="accord-products-template.csv"',
+    'Cache-Control': 'private, no-store',
+  })
+})
+
+app.post('/api/admin/products/csv', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  if (!isMysqlConfigured()) return c.json({ success: false, message: 'MySQL is not configured' }, 503)
+  const form = await c.req.formData()
+  const file = form.get('file')
+  if (!(file instanceof File) || !file.size) return c.json({ success: false, message: 'Upload a CSV file' }, 400)
+  const name = file.name.toLowerCase()
+  if (!name.endsWith('.csv') && file.type && !file.type.includes('csv') && !file.type.includes('excel')) {
+    return c.json({ success: false, message: 'Use a .csv file' }, 400)
+  }
+  try {
+    const text = await file.text()
+    const data = await importProductsFromCsv(text)
+    invalidatePublicCatalog()
+    return c.json({ success: true, data })
+  } catch (error) {
+    return c.json({ success: false, message: databaseErrorMessage(error) }, 400)
+  }
+})
+
+app.get('/api/admin/products/export', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  if (!isMysqlConfigured()) return c.json({ success: false, message: 'MySQL is not configured' }, 503)
+  try {
+    const catalog = await getCatalog()
+    const xml = productsToExcelXml(catalog.products)
+    const stamp = new Date().toISOString().slice(0, 10)
+    return c.body(xml, 200, {
+      'Content-Type': 'application/vnd.ms-excel; charset=utf-8',
+      'Content-Disposition': `attachment; filename="accord-products-${stamp}.xls"`,
+      'Cache-Control': 'private, no-store',
+    })
+  } catch (error) {
+    return c.json({ success: false, message: databaseErrorMessage(error) }, 400)
+  }
+})
+
+app.patch('/api/admin/products/:id', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  if (!isMysqlConfigured()) return c.json({ success: false, message: 'MySQL is not configured' }, 503)
+  const id = c.req.param('id')
+  const body = await c.req.json().catch(() => ({})) as { name?: string; details?: string; distributedFor?: string }
+  if (!String(body.name || '').trim() && body.details === undefined && body.distributedFor === undefined) {
+    return c.json({ success: false, message: 'Nothing to update' }, 400)
+  }
+  try {
+    const data = await updateCatalogProduct(id, {
+      name: body.name,
+      details: body.details,
+      distributedFor: body.distributedFor,
+    })
+    invalidatePublicCatalog()
+    return c.json({ success: true, data })
   } catch (error) {
     return c.json({ success: false, message: databaseErrorMessage(error) }, 400)
   }

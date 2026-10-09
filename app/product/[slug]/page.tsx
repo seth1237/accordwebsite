@@ -87,12 +87,6 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                   <p className="offer-was">Was {displayPrice({ price: product.compareAt }, true)}</p>
                 ) : null}
                 <QuoteForm product={product} catalogueHref={catalogueHref} />
-                <dl className="product-sku-row">
-                  <div>
-                    <dt>SKU</dt>
-                    <dd>{product.id}</dd>
-                  </div>
-                </dl>
                 {product.details ? (
                   <div className="product-tabs" id="details">
                     <div className="product-tablist" role="tablist">

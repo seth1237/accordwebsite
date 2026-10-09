@@ -1,4 +1,5 @@
 import { AdminCatalogCreate } from '@/components/admin-catalog-create'
+import { AdminCatalogCsv } from '@/components/admin-catalog-csv'
 import { AdminCatalogImport } from '@/components/admin-catalog-import'
 import { AdminProductsPanel } from '@/components/admin-products-panel'
 import { getFullCatalog, listCatalogues } from '@/lib/site-data'
@@ -10,6 +11,7 @@ export default async function AdminProductsPage() {
   ])
   return (
     <>
+      <AdminCatalogCsv />
       <AdminCatalogImport />
       <AdminCatalogCreate categories={catalog.categories} />
       <AdminProductsPanel

@@ -31,6 +31,7 @@ export function AdminProductsPanel({
   const [busyId, setBusyId] = useState<string | null>(null)
   const [message, setMessage] = useState('')
   const [details, setDetails] = useState<Record<string, string>>({})
+  const [names, setNames] = useState<Record<string, string>>({})
   const [distributedFor, setDistributedFor] = useState<Record<string, string>>({})
   const [uploadKind, setUploadKind] = useState<Record<string, 'photo' | 'installation'>>({})
 
@@ -122,12 +123,17 @@ export function AdminProductsPanel({
 
   async function saveDetails(productId: string) {
     const product = products.find((item) => item.id === productId)
+    const name = (names[productId] ?? product?.name ?? '').trim()
+    if (!name) {
+      setMessage('Enter a product name')
+      return
+    }
     setBusyId(productId)
-    const response = await fetch('/api/admin/product-details', {
-      method: 'POST',
+    const response = await fetch(`/api/admin/products/${encodeURIComponent(productId)}`, {
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        erpProductId: productId,
+        name,
         details: details[productId] ?? (product?.details || ''),
         distributedFor: distributedFor[productId] ?? (product?.distributedFor || ''),
       }),
@@ -135,10 +141,10 @@ export function AdminProductsPanel({
     const payload = await response.json()
     setBusyId(null)
     if (!response.ok) {
-      setMessage(payload.message || 'Could not save details')
+      setMessage(payload.message || 'Could not save product')
       return
     }
-    setMessage('Product details saved.')
+    setMessage('Product saved.')
     router.refresh()
   }
 
@@ -190,6 +196,9 @@ export function AdminProductsPanel({
           <h1>{title}</h1>
         </div>
         <div className="admin-header-tools">
+          <a className="button button-outline button-compact" href="/api/admin/products/export">
+            Download Excel
+          </a>
           <select
             className="filter-input category-select"
             value={categoryId}
@@ -261,6 +270,13 @@ export function AdminProductsPanel({
                 {open && (
                   <div className="admin-editor">
                     <label>
+                      Product name
+                      <input
+                        value={names[product.id] ?? product.name}
+                        onChange={(event) => setNames((current) => ({ ...current, [product.id]: event.target.value }))}
+                      />
+                    </label>
+                    <label>
                       Product details
                       <textarea
                         value={detailValue(product)}
@@ -278,7 +294,7 @@ export function AdminProductsPanel({
                       />
                     </label>
                     <button className="button button-primary button-compact" disabled={busyId === product.id} onClick={() => saveDetails(product.id)}>
-                      Save details
+                      Save product
                     </button>
                     <div className="admin-image-list">
                       {product.imageAssets.map((asset) => (
