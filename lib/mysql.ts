@@ -33,7 +33,7 @@ type SiteSettings = {
   updatedAt: Date
 }
 
-const MYSQL_SCHEMA_VERSION = 9
+const MYSQL_SCHEMA_VERSION = 10
 
 type MysqlState = {
   pool: Pool | null
@@ -357,6 +357,8 @@ async function applyMysqlSchema() {
   await mysqlAddColumnIfMissing('accord_nx_site_settings', 'use_local_catalog', `use_local_catalog TINYINT(1) NOT NULL DEFAULT 0`)
   await mysqlAddColumnIfMissing('accord_nx_products', 'seo', `seo LONGTEXT NULL`)
   await mysqlAddColumnIfMissing('accord_nx_products', 'hidden', `hidden TINYINT(1) NOT NULL DEFAULT 0`)
+  await mysqlAddColumnIfMissing('accord_nx_product_performance', 'carts', `carts INT NOT NULL DEFAULT 0`)
+  await mysqlAddColumnIfMissing('accord_nx_product_performance', 'last_carted_at', `last_carted_at DATETIME NULL`)
   await pool.query(`
     CREATE TABLE IF NOT EXISTS accord_nx_site_visits (
       visit_date DATE NOT NULL,
@@ -1048,15 +1050,43 @@ export async function mysqlRecordProductShare(input: {
   )
 }
 
+export async function mysqlRecordProductCart(input: {
+  erpProductId: string
+  productName: string
+  categoryId: string
+  categoryName: string
+}) {
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const now = new Date()
+  await pool.query(
+    `INSERT INTO accord_nx_product_performance
+      (erp_product_id, product_name, category_id, category_name, clicks, shares, carts, last_carted_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 0, 0, 1, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+      carts = carts + 1,
+      product_name = VALUES(product_name),
+      category_id = VALUES(category_id),
+      category_name = VALUES(category_name),
+      last_carted_at = VALUES(last_carted_at),
+      updated_at = VALUES(updated_at)`,
+    [input.erpProductId, input.productName, input.categoryId, input.categoryName, now, now, now],
+  )
+}
+
 export async function mysqlGetProductMetricsMap() {
   await ensureMysqlSchema()
   const pool = await getPool()
   const [rows] = await pool.query<RowDataPacket[]>(
-    'SELECT erp_product_id, clicks, shares FROM accord_nx_product_performance',
+    'SELECT erp_product_id, clicks, shares, carts FROM accord_nx_product_performance',
   )
-  const map = new Map<string, { clicks: number; shares: number }>()
+  const map = new Map<string, { clicks: number; shares: number; carts: number }>()
   for (const row of rows) {
-    map.set(String(row.erp_product_id), { clicks: Number(row.clicks) || 0, shares: Number(row.shares) || 0 })
+    map.set(String(row.erp_product_id), {
+      clicks: Number(row.clicks) || 0,
+      shares: Number(row.shares) || 0,
+      carts: Number(row.carts) || 0,
+    })
   }
   return map
 }
@@ -1076,7 +1106,7 @@ export async function mysqlGetCategoryPerformance() {
   const pool = await getPool()
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT category_id AS categoryId, MAX(category_name) AS categoryName,
-            SUM(clicks) AS clicks, SUM(shares) AS shares, COUNT(*) AS productsClicked
+            SUM(clicks) AS clicks, SUM(shares) AS shares, SUM(carts) AS carts, COUNT(*) AS productsClicked
      FROM accord_nx_product_performance
      GROUP BY category_id
      ORDER BY clicks DESC`,
@@ -1086,6 +1116,7 @@ export async function mysqlGetCategoryPerformance() {
     categoryName: String(row.categoryName || ''),
     clicks: Number(row.clicks) || 0,
     shares: Number(row.shares) || 0,
+    carts: Number(row.carts) || 0,
     productsClicked: Number(row.productsClicked) || 0,
   }))
 }
@@ -1133,6 +1164,7 @@ function mapCatalogProductRow(row: CatalogProductRow): CatalogProduct {
     manufacturer: row.manufacturer || undefined,
     clicks: 0,
     shares: 0,
+    carts: 0,
     slug: row.slug,
     shopUrl: `/product/${row.slug}`,
     productType: row.product_type || null,
@@ -1412,6 +1444,7 @@ export async function mysqlCreateCatalogProduct(input: {
     manufacturer: String(input.manufacturer || '').trim() || undefined,
     clicks: 0,
     shares: 0,
+    carts: 0,
     slug,
     shopUrl: `/product/${slug}`,
     featured: Boolean(input.featured),

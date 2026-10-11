@@ -105,7 +105,7 @@ async function loadCatalog(key: string, categoryIds?: string[], includeHidden = 
     products: applyOffersToProducts(
       base.products.map((product) => {
         const stats = metrics.get(product.id)
-        return { ...product, clicks: stats?.clicks || 0, shares: stats?.shares || 0 }
+        return { ...product, clicks: stats?.clicks || 0, shares: stats?.shares || 0, carts: stats?.carts || 0 }
       }),
       liveOffers,
     ),

@@ -71,6 +71,7 @@ import {
   getVisitorReport,
   getVisitorStats,
   listJobs,
+  recordProductCart,
   recordProductClick,
   recordProductShare,
   recordSiteVisit,
@@ -443,6 +444,24 @@ app.post('/api/products/share', async (c) => {
     return c.json({ success: true })
   } catch (error) {
     return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not record share' }, 500)
+  }
+})
+
+app.post('/api/products/cart', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}))
+    const erpProductId = textValue(body.productId || body.erpProductId, 80)
+    if (!erpProductId) return c.json({ success: false, message: 'productId is required' }, 400)
+    await recordProductCart({
+      erpProductId,
+      productName: textValue(body.productName, 200),
+      categoryId: textValue(body.categoryId, 80),
+      categoryName: textValue(body.categoryName, 200),
+    })
+    return c.json({ success: true })
+  } catch (error) {
+    if (isMysqlConnectError(error)) return c.json({ success: true })
+    return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not record cart add' }, 500)
   }
 })
 

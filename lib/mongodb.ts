@@ -19,6 +19,7 @@ import {
   mysqlListDocs,
   mysqlRecordProductClick,
   mysqlRecordProductShare,
+  mysqlRecordProductCart,
   mysqlRecordSiteVisit,
   mysqlGetVisitorReport,
   mysqlGetVisitorStats,
@@ -129,8 +130,10 @@ export type ProductPerformance = {
   categoryName: string
   clicks: number
   shares: number
+  carts: number
   lastClickedAt: Date
   lastSharedAt?: Date
+  lastCartedAt?: Date
   createdAt: Date
   updatedAt: Date
 }
@@ -146,6 +149,7 @@ export type ProductJourney = {
 export type ProductMetrics = {
   clicks: number
   shares: number
+  carts: number
 }
 
 export type CategoryPerformance = {
@@ -153,6 +157,7 @@ export type CategoryPerformance = {
   categoryName: string
   clicks: number
   shares: number
+  carts: number
   productsClicked: number
 }
 
@@ -411,6 +416,7 @@ export async function recordProductClick(input: {
         $setOnInsert: {
           erpProductId: input.erpProductId,
           shares: 0,
+          carts: 0,
           createdAt: now,
         },
       },
@@ -460,6 +466,45 @@ export async function recordProductShare(input: {
         $setOnInsert: {
           erpProductId: input.erpProductId,
           clicks: 0,
+          carts: 0,
+          createdAt: now,
+        },
+      },
+      { upsert: true },
+    )
+  })
+}
+
+export async function recordProductCart(input: {
+  erpProductId: string
+  productName: string
+  categoryId: string
+  categoryName: string
+}): Promise<void> {
+  if (isMysqlConfigured()) {
+    await mysqlRecordProductCart(input)
+    return
+  }
+  if (!isMongoConfigured()) return
+  await withMongo(async () => {
+    await ensureIndexes()
+    const now = new Date()
+    const collection = await getCollection<ProductPerformance>('product_performance')
+    await collection.updateOne(
+      { erpProductId: input.erpProductId },
+      {
+        $inc: { carts: 1 },
+        $set: {
+          productName: input.productName,
+          categoryId: input.categoryId,
+          categoryName: input.categoryName,
+          lastCartedAt: now,
+          updatedAt: now,
+        },
+        $setOnInsert: {
+          erpProductId: input.erpProductId,
+          clicks: 0,
+          shares: 0,
           createdAt: now,
         },
       },
@@ -475,8 +520,8 @@ export async function getProductMetricsMap(): Promise<Map<string, ProductMetrics
     await ensureIndexes()
     const collection = await getCollection<ProductPerformance>('product_performance')
     const map = new Map<string, ProductMetrics>()
-    for (const doc of await collection.find({}, { projection: { erpProductId: 1, clicks: 1, shares: 1 } }).toArray()) {
-      map.set(doc.erpProductId, { clicks: Number(doc.clicks) || 0, shares: Number(doc.shares) || 0 })
+    for (const doc of await collection.find({}, { projection: { erpProductId: 1, clicks: 1, shares: 1, carts: 1 } }).toArray()) {
+      map.set(doc.erpProductId, { clicks: Number(doc.clicks) || 0, shares: Number(doc.shares) || 0, carts: Number(doc.carts) || 0 })
     }
     return map
   })
@@ -513,6 +558,7 @@ export async function getCategoryPerformance(): Promise<CategoryPerformance[]> {
           categoryName: { $last: '$categoryName' },
           clicks: { $sum: '$clicks' },
           shares: { $sum: { $ifNull: ['$shares', 0] } },
+          carts: { $sum: { $ifNull: ['$carts', 0] } },
           productsClicked: { $sum: 1 },
         },
       },
@@ -523,6 +569,7 @@ export async function getCategoryPerformance(): Promise<CategoryPerformance[]> {
           categoryName: 1,
           clicks: 1,
           shares: 1,
+          carts: 1,
           productsClicked: 1,
         },
       },

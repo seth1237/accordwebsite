@@ -355,9 +355,15 @@ export function AdminProductsPanel({
                     </b>
                     <small>{product.categoryName} · {formatKes(product.price)} · {product.imageAssets.length} photos{catalogueFor(product.id) ? ' · PDF catalogue' : ''}</small>
                   </div>
-                  <span className="click-metric">
-                    <b>{product.clicks || 0}</b>
-                    <small>clicks</small>
+                  <span className="metric-pair">
+                    <span className="click-metric">
+                      <b>{product.clicks || 0}</b>
+                      <small>clicks</small>
+                    </span>
+                    <span className="click-metric">
+                      <b>{product.carts || 0}</b>
+                      <small>cart</small>
+                    </span>
                   </span>
                 </button>
                 {open && (

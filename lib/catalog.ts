@@ -43,6 +43,7 @@ export type CatalogProduct = {
   distributedFor?: string
   clicks: number
   shares: number
+  carts: number
   slug: string
   shopUrl: string
   productType?: string | null
@@ -196,6 +197,7 @@ export function toProduct(p: ShopItem): CatalogProduct | null {
     manufacturer: brand,
     clicks: 0,
     shares: 0,
+    carts: 0,
     slug,
     shopUrl: `${ACCORD_SHOP_ORIGIN}/product/${slug}`,
     productType: type,

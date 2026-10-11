@@ -20,7 +20,7 @@ type QuoteCartContextValue = {
   items: QuoteCartItem[]
   count: number
   has: (id: string) => boolean
-  add: (product: Pick<CatalogProduct, 'id' | 'name' | 'slug' | 'categoryName' | 'price' | 'onOffer' | 'offerId'>, quantity?: number) => void
+  add: (product: Pick<CatalogProduct, 'id' | 'name' | 'slug' | 'categoryId' | 'categoryName' | 'price' | 'onOffer' | 'offerId'>, quantity?: number) => void
   remove: (id: string) => void
   setQuantity: (id: string, quantity: number) => void
   clear: () => void
@@ -54,7 +54,25 @@ export function QuoteCartProvider({ children }: { children: React.ReactNode }) {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
   }, [items, ready])
 
-  const add = useCallback((product: Pick<CatalogProduct, 'id' | 'name' | 'slug' | 'categoryName' | 'price' | 'onOffer' | 'offerId'>, quantity = 1) => {
+  const add = useCallback((product: Pick<CatalogProduct, 'id' | 'name' | 'slug' | 'categoryId' | 'categoryName' | 'price' | 'onOffer' | 'offerId'>, quantity = 1) => {
+    try {
+      const key = `tarumed-cart-${product.id}`
+      const last = Number(sessionStorage.getItem(key) || 0)
+      if (Date.now() - last >= 1500) {
+        sessionStorage.setItem(key, String(Date.now()))
+        void fetch('/api/products/cart', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            productId: product.id,
+            productName: product.name,
+            categoryId: product.categoryId,
+            categoryName: product.categoryName,
+          }),
+          keepalive: true,
+        })
+      }
+    } catch {}
     setItems((current) => {
       const found = current.find((item) => item.id === product.id)
       if (found) {

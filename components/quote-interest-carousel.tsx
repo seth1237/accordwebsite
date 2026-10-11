@@ -23,7 +23,7 @@ export function QuoteInterestCarousel({
     const linked = products.filter((product) => !cartIds.has(product.id) && categories.has(product.categoryName))
     const popular = products
       .filter((product) => !cartIds.has(product.id) && !categories.has(product.categoryName))
-      .sort((a, b) => (b.clicks || 0) - (a.clicks || 0) || a.name.localeCompare(b.name))
+      .sort((a, b) => (b.carts || 0) - (a.carts || 0) || (b.clicks || 0) - (a.clicks || 0) || a.name.localeCompare(b.name))
     const mixed = items.length ? [...linked, ...popular] : popular
     const unique: CatalogProduct[] = []
     const seen = new Set<string>()

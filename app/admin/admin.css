@@ -22,7 +22,7 @@
 .admin-banner { display: flex; justify-content: space-between; align-items: center; background: #dff4f1; border-radius: 13px; padding: 28px 30px; margin-bottom: 17px; }
 .admin-banner h2 { font-size: 24px; letter-spacing: -.03em; margin: 7px 0; }
 .admin-banner p { font-size: 13px; color: #60767d; }
-.admin-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 13px; margin-bottom: 18px; }
+.admin-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 13px; margin-bottom: 18px; }
 .admin-stats > div { background: rgba(255,255,255,.62); border: 1px solid rgba(255,255,255,.72); padding: 20px; display: flex; gap: 14px; align-items: center; border-radius: 14px; backdrop-filter: blur(10px); box-shadow: 6px 6px 16px rgba(27,61,143,.06), -4px -4px 12px rgba(255,255,255,.75); }
 .admin-stats svg { color: #087f85; }
 .admin-stats b, .admin-stats small { display: block; }
