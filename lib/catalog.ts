@@ -47,6 +47,7 @@ export type CatalogProduct = {
   shopUrl: string
   productType?: string | null
   featured: boolean
+  hidden?: boolean
   createdOn?: string
   onOffer?: boolean
   offerId?: string

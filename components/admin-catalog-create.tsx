@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, type FormEvent } from 'react'
+import { useState, type DragEvent, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import type { CatalogCategory } from '@/lib/catalog'
 import { AdminSeoPanel } from '@/components/admin-seo-panel'
@@ -13,6 +13,8 @@ export function AdminCatalogCreate({ categories }: { categories: CatalogCategory
   const [useNewCategory, setUseNewCategory] = useState(false)
   const [productName, setProductName] = useState('')
   const [productDescription, setProductDescription] = useState('')
+  const [photoCount, setPhotoCount] = useState(0)
+  const [draggingPhotos, setDraggingPhotos] = useState(false)
 
   function open(next: 'product' | 'category') {
     setMode(next)
@@ -20,6 +22,8 @@ export function AdminCatalogCreate({ categories }: { categories: CatalogCategory
     setUseNewCategory(next === 'product' && categories.length === 0)
     setProductName('')
     setProductDescription('')
+    setPhotoCount(0)
+    setDraggingPhotos(false)
   }
 
   async function saveCategory(event: FormEvent<HTMLFormElement>) {
@@ -136,10 +140,52 @@ export function AdminCatalogCreate({ categories }: { categories: CatalogCategory
               <input name="price" type="number" min="0" step="1" placeholder="0 for request a quote" />
             </label>
           </div>
-          <label>
-            Photos
-            <input name="file" type="file" accept="image/*" multiple />
-          </label>
+          <div
+            className={`admin-dropzone${draggingPhotos ? ' is-dragging' : ''}${photoCount ? ' has-file' : ''}`}
+            onDragEnter={(event) => {
+              event.preventDefault()
+              setDraggingPhotos(true)
+            }}
+            onDragOver={(event: DragEvent) => {
+              event.preventDefault()
+              event.dataTransfer.dropEffect = 'copy'
+              setDraggingPhotos(true)
+            }}
+            onDragLeave={(event) => {
+              if (event.currentTarget.contains(event.relatedTarget as Node)) return
+              setDraggingPhotos(false)
+            }}
+            onDrop={(event: DragEvent) => {
+              event.preventDefault()
+              setDraggingPhotos(false)
+              const input = event.currentTarget.querySelector('input[type="file"]') as HTMLInputElement | null
+              if (!input) return
+              const dropped = Array.from(event.dataTransfer.files).filter(
+                (file) => file.type.startsWith('image/') || /\.(jpe?g|png|gif|webp|avif|bmp)$/i.test(file.name),
+              )
+              const transfer = new DataTransfer()
+              for (const file of dropped) transfer.items.add(file)
+              input.files = transfer.files
+              setPhotoCount(dropped.length)
+            }}
+          >
+            <input
+              className="admin-dropzone-input"
+              name="file"
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(event) => setPhotoCount(event.target.files?.length || 0)}
+            />
+            <strong>
+              {photoCount
+                ? `${photoCount} photo${photoCount === 1 ? '' : 's'} selected`
+                : draggingPhotos
+                  ? 'Drop images now'
+                  : 'Drop photos here'}
+            </strong>
+            <span>{photoCount ? 'Click to replace' : 'or click to browse · JPG, PNG, WebP'}</span>
+          </div>
           <label className="admin-check">
             <input type="checkbox" name="inStock" value="true" defaultChecked />
             In stock

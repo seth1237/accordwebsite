@@ -113,8 +113,10 @@ export async function getCatalog(categoryIds?: string[]): Promise<Catalog> {
 }
 
 export async function getFullCatalog(): Promise<Catalog> {
-  const payload = await backendJson<{ catalog: Catalog }>('/api/catalog')
-  return payload?.catalog || emptyCatalog
+  const payload = await backendJson<{ catalog: Catalog }>('/api/admin/catalog')
+  if (payload?.catalog) return payload.catalog
+  const fallback = await backendJson<{ catalog: Catalog }>('/api/catalog')
+  return fallback?.catalog || emptyCatalog
 }
 
 export async function getCatalogProduct(idOrSlug: string): Promise<CatalogProduct | null> {

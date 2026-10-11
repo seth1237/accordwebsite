@@ -19,7 +19,7 @@ export default async function AdminProductsPage() {
         categories={catalog.categories}
         catalogues={catalogues}
         title="Products"
-        subtitle="Filter by category, then open a product to edit details, photos, and the machine catalogue PDF."
+        subtitle="Drop photos onto a product, or open it to edit details, hide it from the website, or delete it."
       />
     </>
   )

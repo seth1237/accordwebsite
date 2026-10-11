@@ -33,7 +33,7 @@ type SiteSettings = {
   updatedAt: Date
 }
 
-const MYSQL_SCHEMA_VERSION = 8
+const MYSQL_SCHEMA_VERSION = 9
 
 type MysqlState = {
   pool: Pool | null
@@ -356,6 +356,7 @@ async function applyMysqlSchema() {
   await mysqlAddColumnIfMissing('accord_nx_files', 'source_url', `source_url VARCHAR(512) NOT NULL DEFAULT ''`)
   await mysqlAddColumnIfMissing('accord_nx_site_settings', 'use_local_catalog', `use_local_catalog TINYINT(1) NOT NULL DEFAULT 0`)
   await mysqlAddColumnIfMissing('accord_nx_products', 'seo', `seo LONGTEXT NULL`)
+  await mysqlAddColumnIfMissing('accord_nx_products', 'hidden', `hidden TINYINT(1) NOT NULL DEFAULT 0`)
   await pool.query(`
     CREATE TABLE IF NOT EXISTS accord_nx_site_visits (
       visit_date DATE NOT NULL,
@@ -1103,9 +1104,13 @@ type CatalogProductRow = RowDataPacket & {
   category_name: string
   featured: number
   in_stock: number
+  hidden?: number
   created_on: string
   seo?: string | null
 }
+
+const CATALOG_PRODUCT_COLUMNS = `id, slug, name, product_type, description, details, price, compare_at, manufacturer,
+              category_id, category_name, featured, in_stock, hidden, created_on, seo`
 
 function mapCatalogProductRow(row: CatalogProductRow): CatalogProduct {
   const price = Number(row.price) || 0
@@ -1132,6 +1137,7 @@ function mapCatalogProductRow(row: CatalogProductRow): CatalogProduct {
     shopUrl: `/product/${row.slug}`,
     productType: row.product_type || null,
     featured: Boolean(row.featured),
+    hidden: Boolean(row.hidden),
     createdOn: row.created_on || undefined,
     seo: row.seo ? parseSeoJson(row.seo) : undefined,
   }
@@ -1311,8 +1317,7 @@ export async function mysqlGetCatalogProduct(id: string) {
   await ensureMysqlSchema()
   const pool = await getPool()
   const [rows] = await pool.query<CatalogProductRow[]>(
-    `SELECT id, slug, name, product_type, description, details, price, compare_at, manufacturer,
-            category_id, category_name, featured, in_stock, created_on, seo
+    `SELECT ${CATALOG_PRODUCT_COLUMNS}
      FROM accord_nx_products WHERE id = ? LIMIT 1`,
     [productId],
   )
@@ -1327,14 +1332,12 @@ export async function mysqlFindCatalogProductByName(name: string, categoryName?:
   const category = String(categoryName || '').trim()
   const [rows] = category
     ? await pool.query<CatalogProductRow[]>(
-        `SELECT id, slug, name, product_type, description, details, price, compare_at, manufacturer,
-                category_id, category_name, featured, in_stock, created_on, seo
+        `SELECT ${CATALOG_PRODUCT_COLUMNS}
          FROM accord_nx_products WHERE LOWER(name) = LOWER(?) AND LOWER(category_name) = LOWER(?) LIMIT 1`,
         [title, category],
       )
     : await pool.query<CatalogProductRow[]>(
-        `SELECT id, slug, name, product_type, description, details, price, compare_at, manufacturer,
-                category_id, category_name, featured, in_stock, created_on, seo
+        `SELECT ${CATALOG_PRODUCT_COLUMNS}
          FROM accord_nx_products WHERE LOWER(name) = LOWER(?) LIMIT 1`,
         [title],
       )
@@ -1350,6 +1353,7 @@ export async function mysqlUpdateCatalogProduct(
     categoryId?: string
     categoryName?: string
     price?: number
+    hidden?: boolean
   },
 ) {
   const existing = await mysqlGetCatalogProduct(id)
@@ -1361,13 +1365,14 @@ export async function mysqlUpdateCatalogProduct(
   const categoryId = updates.categoryId || existing.categoryId
   const categoryName = updates.categoryName || existing.categoryName
   const price = updates.price !== undefined ? Number(updates.price) || 0 : existing.price
+  const hidden = updates.hidden !== undefined ? Boolean(updates.hidden) : Boolean(existing.hidden)
   await ensureMysqlSchema()
   const pool = await getPool()
   await pool.query(
     `UPDATE accord_nx_products
-     SET name = ?, description = ?, details = ?, price = ?, category_id = ?, category_name = ?, updated_at = ?
+     SET name = ?, description = ?, details = ?, price = ?, category_id = ?, category_name = ?, hidden = ?, updated_at = ?
      WHERE id = ?`,
-    [name, description, details, price, categoryId, categoryName, new Date(), id],
+    [name, description, details, price, categoryId, categoryName, hidden ? 1 : 0, new Date(), id],
   )
   return mysqlGetCatalogProduct(id)
 }
@@ -1410,6 +1415,7 @@ export async function mysqlCreateCatalogProduct(input: {
     slug,
     shopUrl: `/product/${slug}`,
     featured: Boolean(input.featured),
+    hidden: false,
     createdOn: new Date().toISOString(),
     seo: input.seo,
   }
@@ -1417,13 +1423,30 @@ export async function mysqlCreateCatalogProduct(input: {
   return product
 }
 
+export async function mysqlDeleteCatalogProduct(id: string) {
+  const existing = await mysqlGetCatalogProduct(id)
+  if (!existing) return null
+  const catalogues = await mysqlListCatalogues(id)
+  for (const catalogue of catalogues) {
+    await mysqlDeleteCatalogue(catalogue._id)
+  }
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  await pool.query(
+    `DELETE FROM accord_nx_files WHERE owner_key = ? AND kind IN ('product-image', 'product-installation')`,
+    [id],
+  )
+  await pool.query('DELETE FROM accord_nx_product_content WHERE erp_product_id = ?', [id])
+  await pool.query('DELETE FROM accord_nx_products WHERE id = ?', [id])
+  return existing
+}
+
 export async function mysqlListCatalogProducts(): Promise<CatalogProduct[]> {
   return withMysqlRetry(async () => {
     await ensureMysqlSchema()
     const pool = await getPool()
     const [rows] = await pool.query<CatalogProductRow[]>(
-      `SELECT id, slug, name, product_type, description, details, price, compare_at, manufacturer,
-              category_id, category_name, featured, in_stock, created_on, seo
+      `SELECT ${CATALOG_PRODUCT_COLUMNS}
        FROM accord_nx_products ORDER BY name ASC`,
     )
     return rows.map(mapCatalogProductRow)

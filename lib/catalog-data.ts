@@ -18,6 +18,7 @@ import {
   isMysqlConfigured,
   mysqlCreateCatalogProduct,
   mysqlCreateCategory,
+  mysqlDeleteCatalogProduct,
   mysqlEnsureCategory,
   mysqlFindCatalogProductByName,
   mysqlListCategories,
@@ -67,7 +68,7 @@ function catalogMemoState(): CatalogMemoState {
   return globalForCatalog.__accordCatalogMemo
 }
 
-const getCatalogBase = cache(async (categoryKey: string, generation: number): Promise<Catalog> => {
+const getCatalogBase = cache(async (categoryKey: string, generation: number, includeHidden: boolean): Promise<Catalog> => {
   void generation
   const categoryIds = categoryKey ? categoryKey.split(',') : undefined
   const [rawProducts, content, storedCategories] = await Promise.all([
@@ -79,20 +80,22 @@ const getCatalogBase = cache(async (categoryKey: string, generation: number): Pr
   const merged = assignSlugs(
     rawProducts.map((product) => mergeOverlay(product, content.get(product.id))),
   )
+  const listed = includeHidden ? merged : merged.filter((product) => !product.hidden)
 
   const products = categoryIds?.length
-    ? merged.filter((product) => categoryIds.includes(product.categoryId) || categoryIds.includes(product.categoryName))
-    : merged
+    ? listed.filter((product) => categoryIds.includes(product.categoryId) || categoryIds.includes(product.categoryName))
+    : listed
 
   return {
     products,
-    categories: mergeCatalogCategories(storedCategories, categoriesFromProducts(categoryIds?.length ? merged : products)),
+    categories: mergeCatalogCategories(storedCategories, categoriesFromProducts(listed)),
   }
 })
 
-async function loadCatalog(key: string, categoryIds?: string[]): Promise<Catalog> {
+async function loadCatalog(key: string, categoryIds?: string[], includeHidden = false): Promise<Catalog> {
+  const categoryKey = categoryIds?.slice().sort().join(',') || ''
   const [base, metrics] = await Promise.all([
-    getCatalogBase(key, catalogGeneration),
+    getCatalogBase(categoryKey, catalogGeneration, includeHidden),
     getProductMetricsMap().catch(() => new Map()),
   ])
 
@@ -111,40 +114,45 @@ async function loadCatalog(key: string, categoryIds?: string[]): Promise<Catalog
 
   if (catalog.products.length) {
     catalogMemoState().memo = { key, at: Date.now(), catalog }
-    if (!categoryIds?.length) await writeDevCatalogCache(catalog)
+    if (!includeHidden && !categoryIds?.length) await writeDevCatalogCache(catalog)
     return catalog
   }
 
-  if (categoryIds?.length) return catalog
+  if (categoryIds?.length || includeHidden) return catalog
 
   const cached = lastCatalog() || (await readDevCatalogCache())
   if (cached?.products.length) return cached
   return catalog
 }
 
-export async function getCatalog(categoryIds?: string[]): Promise<Catalog> {
-  const key = categoryIds?.slice().sort().join(',') || ''
+export async function getCatalog(categoryIds?: string[], options?: { includeHidden?: boolean }): Promise<Catalog> {
+  const includeHidden = Boolean(options?.includeHidden)
+  const key = `${categoryIds?.slice().sort().join(',') || ''}|h:${includeHidden ? 1 : 0}`
   const state = catalogMemoState()
   if (state.memo && state.memo.key === key && Date.now() - state.memo.at < CATALOG_TTL_MS) {
     return state.memo.catalog
   }
 
-  const cached = !categoryIds?.length ? (lastCatalog() || (await readDevCatalogCache())) : null
+  const cached = !includeHidden && !categoryIds?.length ? (lastCatalog() || (await readDevCatalogCache())) : null
   if (cached?.products.length) {
-    state.memo = { key, at: Date.now(), catalog: cached }
+    const publicCached = {
+      ...cached,
+      products: cached.products.filter((product) => !product.hidden),
+    }
+    state.memo = { key, at: Date.now(), catalog: publicCached }
     if (!state.inflight.has(key)) {
-      const refresh = loadCatalog(key, categoryIds).finally(() => {
+      const refresh = loadCatalog(key, categoryIds, includeHidden).finally(() => {
         state.inflight.delete(key)
       })
       state.inflight.set(key, refresh)
     }
-    return cached
+    return publicCached
   }
 
   const pending = state.inflight.get(key)
   if (pending) return pending
 
-  const load = loadCatalog(key, categoryIds).finally(() => {
+  const load = loadCatalog(key, categoryIds, includeHidden).finally(() => {
     state.inflight.delete(key)
   })
   state.inflight.set(key, load)
@@ -227,13 +235,14 @@ export async function createCatalogProduct(input: {
 
 export async function updateCatalogProduct(
   id: string,
-  updates: { name?: string; details?: string; distributedFor?: string; description?: string },
+  updates: { name?: string; details?: string; distributedFor?: string; description?: string; hidden?: boolean },
 ) {
   if (!isMysqlConfigured()) throw new Error('MySQL is not configured')
   const product = await mysqlUpdateCatalogProduct(id, {
     name: updates.name,
     details: updates.details,
     description: updates.description,
+    hidden: updates.hidden,
   })
   if (!product) throw new Error('Product not found')
   if (updates.details !== undefined || updates.distributedFor !== undefined) {
@@ -241,6 +250,14 @@ export async function updateCatalogProduct(
       distributedFor: updates.distributedFor,
     })
   }
+  await invalidateCatalog()
+  return product
+}
+
+export async function deleteCatalogProduct(id: string) {
+  if (!isMysqlConfigured()) throw new Error('MySQL is not configured')
+  const product = await mysqlDeleteCatalogProduct(id)
+  if (!product) throw new Error('Product not found')
   await invalidateCatalog()
   return product
 }

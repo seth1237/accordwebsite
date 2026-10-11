@@ -1,14 +1,21 @@
 'use client'
 
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useMemo, useState, type DragEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { Trash2 } from 'lucide-react'
+import { Eye, EyeOff, Trash2 } from 'lucide-react'
 import type { CatalogCategory, CatalogProduct } from '@/lib/catalog'
 import { formatKes, productImageSrc, slugifyName } from '@/lib/catalog'
 import type { Catalogue } from '@/lib/content'
 import { CatalogueDownloadLink } from '@/components/catalogue-download'
 
 const PAGE_SIZE = 10
+
+function imageFiles(list: FileList | File[] | null | undefined) {
+  if (!list) return []
+  return Array.from(list).filter(
+    (file) => file.type.startsWith('image/') || /\.(jpe?g|png|gif|webp|avif|bmp)$/i.test(file.name),
+  )
+}
 
 export function AdminProductsPanel({
   products,
@@ -26,14 +33,18 @@ export function AdminProductsPanel({
   const router = useRouter()
   const [query, setQuery] = useState('')
   const [categoryId, setCategoryId] = useState('all')
+  const [visibility, setVisibility] = useState<'all' | 'live' | 'hidden'>('all')
   const [page, setPage] = useState(1)
   const [openId, setOpenId] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [draggingId, setDraggingId] = useState<string | null>(null)
   const [message, setMessage] = useState('')
   const [details, setDetails] = useState<Record<string, string>>({})
   const [names, setNames] = useState<Record<string, string>>({})
   const [distributedFor, setDistributedFor] = useState<Record<string, string>>({})
   const [uploadKind, setUploadKind] = useState<Record<string, 'photo' | 'installation'>>({})
+
+  const hiddenCount = products.filter((product) => product.hidden).length
 
   const categoryOptions = useMemo(() => {
     if (categories.length) return [...categories].sort((a, b) => a.name.localeCompare(b.name))
@@ -50,9 +61,10 @@ export function AdminProductsPanel({
     const q = query.trim().toLowerCase()
     return products
       .filter((product) => (categoryId === 'all' ? true : product.categoryId === categoryId))
+      .filter((product) => (visibility === 'all' ? true : visibility === 'hidden' ? Boolean(product.hidden) : !product.hidden))
       .filter((product) => (q ? `${product.name} ${product.categoryName}`.toLowerCase().includes(q) : true))
       .sort((a, b) => a.categoryName.localeCompare(b.categoryName) || a.name.localeCompare(b.name))
-  }, [products, query, categoryId])
+  }, [products, query, categoryId, visibility])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const currentPage = Math.min(page, totalPages)
@@ -69,12 +81,17 @@ export function AdminProductsPanel({
   }
 
   async function upload(productId: string, files: FileList | File[]) {
+    const images = imageFiles(files)
+    if (!images.length) {
+      setMessage('Drop image files (JPG, PNG, or WebP).')
+      return
+    }
     setBusyId(productId)
     setMessage('')
     const body = new FormData()
     body.set('erpProductId', productId)
     body.set('installation', uploadKind[productId] === 'installation' ? 'true' : 'false')
-    for (const file of Array.from(files)) body.append('file', file)
+    for (const file of images) body.append('file', file)
     const response = await fetch('/api/admin/product-image', { method: 'POST', body })
     const payload = await response.json()
     setBusyId(null)
@@ -84,6 +101,13 @@ export function AdminProductsPanel({
     }
     setMessage(uploadKind[productId] === 'installation' ? 'Recent installation photo saved.' : 'Product photo saved.')
     router.refresh()
+  }
+
+  function acceptDrop(productId: string, event: DragEvent) {
+    event.preventDefault()
+    event.stopPropagation()
+    setDraggingId(null)
+    void upload(productId, event.dataTransfer.files)
   }
 
   async function setInstallation(productId: string, publicId: string, installation: boolean) {
@@ -148,6 +172,42 @@ export function AdminProductsPanel({
     router.refresh()
   }
 
+  async function setHidden(product: CatalogProduct, hidden: boolean) {
+    setBusyId(product.id)
+    setMessage('')
+    const response = await fetch(`/api/admin/products/${encodeURIComponent(product.id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hidden }),
+    })
+    const payload = await response.json().catch(() => ({}))
+    setBusyId(null)
+    if (!response.ok) {
+      setMessage(payload.message || (hidden ? 'Could not hide product' : 'Could not restore product'))
+      return
+    }
+    setMessage(hidden ? 'Product hidden from the website.' : 'Product is visible on the website.')
+    router.refresh()
+  }
+
+  async function removeProduct(product: CatalogProduct) {
+    if (!window.confirm(`Permanently delete “${product.name}”? Photos and the catalogue PDF for this product will also be removed.`)) {
+      return
+    }
+    setBusyId(product.id)
+    setMessage('')
+    const response = await fetch(`/api/admin/products/${encodeURIComponent(product.id)}`, { method: 'DELETE' })
+    const payload = await response.json().catch(() => ({}))
+    setBusyId(null)
+    if (!response.ok) {
+      setMessage(payload.message || 'Could not delete product')
+      return
+    }
+    setOpenId(null)
+    setMessage('Product deleted.')
+    router.refresh()
+  }
+
   function catalogueFor(productId: string) {
     return catalogues.find((item) => item.erpProductId === productId)
   }
@@ -201,6 +261,19 @@ export function AdminProductsPanel({
           </a>
           <select
             className="filter-input category-select"
+            value={visibility}
+            onChange={(event) => {
+              setVisibility(event.target.value as 'all' | 'live' | 'hidden')
+              setPage(1)
+            }}
+            aria-label="Filter by visibility"
+          >
+            <option value="all">All products</option>
+            <option value="live">On the website</option>
+            <option value="hidden">Hidden ({hiddenCount})</option>
+          </select>
+          <select
+            className="filter-input category-select"
             value={categoryId}
             onChange={(event) => changeCategory(event.target.value)}
             aria-label="Filter by category"
@@ -252,14 +325,34 @@ export function AdminProductsPanel({
             const open = openId === product.id
             const previous = visible[index - 1]
             const showHeading = categoryId === 'all' && product.categoryName !== previous?.categoryName
+            const dragging = draggingId === product.id
             return (
               <Fragment key={product.id}>
                 {showHeading && <h4 className="admin-cat-head">{product.categoryName}</h4>}
-                <article className="admin-product-block">
+                <article
+                  className={`admin-product-block${product.hidden ? ' is-hidden' : ''}${dragging ? ' is-dragging' : ''}`}
+                  onDragEnter={(event) => {
+                    event.preventDefault()
+                    setDraggingId(product.id)
+                  }}
+                  onDragOver={(event) => {
+                    event.preventDefault()
+                    event.dataTransfer.dropEffect = 'copy'
+                    setDraggingId(product.id)
+                  }}
+                  onDragLeave={(event) => {
+                    if (event.currentTarget.contains(event.relatedTarget as Node)) return
+                    setDraggingId((current) => (current === product.id ? null : current))
+                  }}
+                  onDrop={(event) => acceptDrop(product.id, event)}
+                >
                 <button type="button" className="admin-product" onClick={() => setOpenId(open ? null : product.id)}>
                   <img src={productImageSrc(product)} alt="" />
                   <div>
-                    <b>{product.name}</b>
+                    <b>
+                      {product.name}
+                      {product.hidden ? <em className="admin-status-badge">Hidden</em> : null}
+                    </b>
                     <small>{product.categoryName} · {formatKes(product.price)} · {product.imageAssets.length} photos{catalogueFor(product.id) ? ' · PDF catalogue' : ''}</small>
                   </div>
                   <span className="click-metric">
@@ -350,13 +443,23 @@ export function AdminProductsPanel({
                         Recent installation
                       </label>
                     </fieldset>
-                    <label className="button button-outline button-compact">
-                      {busyId === product.id ? 'Saving…' : 'Add images'}
+                    <div
+                      className={`admin-dropzone${dragging ? ' is-dragging' : ''}`}
+                      onDragEnter={(event) => {
+                        event.preventDefault()
+                        setDraggingId(product.id)
+                      }}
+                      onDragOver={(event) => {
+                        event.preventDefault()
+                        event.dataTransfer.dropEffect = 'copy'
+                      }}
+                      onDrop={(event) => acceptDrop(product.id, event)}
+                    >
                       <input
+                        className="admin-dropzone-input"
                         type="file"
                         accept="image/*"
                         multiple
-                        hidden
                         disabled={busyId === product.id}
                         onChange={(event) => {
                           const files = event.target.files
@@ -364,7 +467,9 @@ export function AdminProductsPanel({
                           event.target.value = ''
                         }}
                       />
-                    </label>
+                      <strong>{busyId === product.id ? 'Saving…' : dragging ? 'Drop images now' : 'Drop images here'}</strong>
+                      <span>or click to browse · JPG, PNG, WebP</span>
+                    </div>
                     <div className="admin-catalogue-row">
                       {catalogueFor(product.id) ? (
                         <small>
@@ -406,6 +511,26 @@ export function AdminProductsPanel({
                           }}
                         />
                       </label>
+                    </div>
+                    <div className="admin-job-actions">
+                      <button
+                        type="button"
+                        className="button button-outline button-compact"
+                        disabled={busyId === product.id}
+                        onClick={() => void setHidden(product, !product.hidden)}
+                      >
+                        {product.hidden ? <Eye size={14} /> : <EyeOff size={14} />}
+                        {product.hidden ? 'Show on website' : 'Hide from website'}
+                      </button>
+                      <button
+                        type="button"
+                        className="button button-danger button-compact"
+                        disabled={busyId === product.id}
+                        onClick={() => void removeProduct(product)}
+                      >
+                        <Trash2 size={14} />
+                        Delete product
+                      </button>
                     </div>
                   </div>
                 )}

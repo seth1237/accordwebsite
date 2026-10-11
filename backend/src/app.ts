@@ -5,7 +5,7 @@ import { bodyLimit } from 'hono/body-limit'
 import { z } from 'zod'
 import { ADMIN_COOKIE, adminCookieOptions, authenticateAdmin, createAdminSessionValue, parseAdminSessionValue } from '../../lib/auth-core'
 import { slugifyName } from '../../lib/catalog'
-import { createCatalogCategory, createCatalogProduct, getCatalog, getCatalogProduct, getPriceVisibility, importProductsFromCsv, updateCatalogProduct } from '../../lib/catalog-data'
+import { createCatalogCategory, createCatalogProduct, deleteCatalogProduct, getCatalog, getCatalogProduct, getPriceVisibility, importProductsFromCsv, updateCatalogProduct } from '../../lib/catalog-data'
 import { csvIds } from '../../lib/content'
 import { isOfferLive, parseOfferProductPrices } from '../../lib/offers'
 import { parseSeo } from '../../lib/seo-fields'
@@ -607,6 +607,13 @@ app.post('/api/admin/categories', async (c) => {
   }
 })
 
+app.get('/api/admin/catalog', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  const catalog = await getCatalog(undefined, { includeHidden: true })
+  return c.json({ success: true, catalog })
+})
+
 app.post('/api/admin/products', async (c) => {
   const auth = requireAdmin(c)
   if (auth.error) return c.json(auth.error, auth.status)
@@ -685,7 +692,7 @@ app.get('/api/admin/products/export', async (c) => {
   if (auth.error) return c.json(auth.error, auth.status)
   if (!isMysqlConfigured()) return c.json({ success: false, message: 'MySQL is not configured' }, 503)
   try {
-    const catalog = await getCatalog()
+    const catalog = await getCatalog(undefined, { includeHidden: true })
     const xml = productsToExcelXml(catalog.products)
     const stamp = new Date().toISOString().slice(0, 10)
     return c.body(xml, 200, {
@@ -703,18 +710,32 @@ app.patch('/api/admin/products/:id', async (c) => {
   if (auth.error) return c.json(auth.error, auth.status)
   if (!isMysqlConfigured()) return c.json({ success: false, message: 'MySQL is not configured' }, 503)
   const id = c.req.param('id')
-  const body = await c.req.json().catch(() => ({})) as { name?: string; details?: string; distributedFor?: string }
-  if (!String(body.name || '').trim() && body.details === undefined && body.distributedFor === undefined) {
+  const body = await c.req.json().catch(() => ({})) as { name?: string; details?: string; distributedFor?: string; hidden?: boolean }
+  if (!String(body.name || '').trim() && body.details === undefined && body.distributedFor === undefined && typeof body.hidden !== 'boolean') {
     return c.json({ success: false, message: 'Nothing to update' }, 400)
   }
   try {
     const data = await updateCatalogProduct(id, {
-      name: body.name,
+      name: String(body.name || '').trim() || undefined,
       details: body.details,
       distributedFor: body.distributedFor,
+      hidden: typeof body.hidden === 'boolean' ? body.hidden : undefined,
     })
     invalidatePublicCatalog()
     return c.json({ success: true, data })
+  } catch (error) {
+    return c.json({ success: false, message: databaseErrorMessage(error) }, 400)
+  }
+})
+
+app.delete('/api/admin/products/:id', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  if (!isMysqlConfigured()) return c.json({ success: false, message: 'MySQL is not configured' }, 503)
+  try {
+    await deleteCatalogProduct(c.req.param('id'))
+    invalidatePublicCatalog()
+    return c.json({ success: true })
   } catch (error) {
     return c.json({ success: false, message: databaseErrorMessage(error) }, 400)
   }

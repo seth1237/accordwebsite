@@ -48,10 +48,35 @@
 .fake-switch.on span { margin-left: 18px; }
 .admin-product-list { display: grid; gap: 10px; }
 .admin-product-block { border: 1px solid rgba(237,242,241,.9); border-radius: 12px; overflow: hidden; background: rgba(255,255,255,.45); }
+.admin-product-block.is-hidden { opacity: .72; }
+.admin-product-block.is-dragging { outline: 2px dashed #087f85; background: #e6f6f3; }
 .admin-product { display: grid; grid-template-columns: 64px 1fr auto; gap: 12px; align-items: center; width: 100%; border: 0; background: transparent; padding: 10px; text-align: left; cursor: pointer; transition: background-color .2s ease; }
+.admin-status-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #123744;
+  color: #fff;
+  font-size: 9px;
+  font-style: normal;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+.button-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #f0c2c0;
+  color: #b42318;
+  background: #fff7f6;
+}
+.admin-job-actions .button { display: inline-flex; align-items: center; gap: 6px; }
 .admin-product:hover { background: rgba(255,255,255,.55); }
 .admin-product img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; background: #eef3f2; }
-.admin-product b, .admin-product small { display: block; }
+.admin-product b { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.admin-product small { display: block; }
 .admin-product small { color: #789096; margin-top: 4px; font-size: 12px; }
 .click-metric { text-align: right; min-width: 64px; }
 .click-metric b { font-size: 18px; color: #087f85; }
