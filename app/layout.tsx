@@ -47,6 +47,9 @@ export const metadata: Metadata = {
     follow: true,
     googleBot: { index: true, follow: true },
   },
+  verification: {
+    google: 'uQJ8v3Kx3C3lP22ordS-V4NNW8oKcvFlDDSeNIfAeBM',
+  },
 }
 
 export const viewport: Viewport = { colorScheme: 'light', themeColor: '#0b1220' }
