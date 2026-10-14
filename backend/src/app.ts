@@ -96,7 +96,14 @@ import { PRODUCT_CSV_TEMPLATE, productsToExcelXml } from '../../lib/product-csv'
 import { deleteCloudinaryImage, isCloudinaryConfigured, uploadProductImage } from '../../lib/cloudinary'
 import { createERPQuote } from '../../lib/erp'
 import { COMPANY } from '../../lib/utils'
-import { formChecked, formText, uploadFormDocument, uploadFormImage } from './forms'
+import {
+  createJobApplication,
+  deleteJobApplication,
+  getJobApplicationCv,
+  listJobApplications,
+  updateJobApplicationStatus,
+} from '../../lib/job-applications'
+import { formChecked, formText, uploadFormCv, uploadFormDocument, uploadFormImage } from './forms'
 
 const CORS_ORIGINS = new Set([
   'https://accordmedical.co.ke',
@@ -263,6 +270,26 @@ app.get('/api/categories/:slug', async (c) => {
 })
 
 app.get('/api/jobs', async (c) => c.json({ success: true, data: await listJobs(true).catch(() => []) }))
+app.post('/api/jobs/apply', async (c) => {
+  const form = await c.req.formData()
+  try {
+    const cv = await uploadFormCv(form.get('cv'))
+    if (!cv) return c.json({ success: false, message: 'Upload your CV' }, 400)
+    const data = await createJobApplication({
+      fullName: formText(form, 'fullName'),
+      email: formText(form, 'email'),
+      phone: formText(form, 'phone'),
+      department: formText(form, 'department'),
+      workingTerms: formText(form, 'workingTerms'),
+      notes: formText(form, 'notes'),
+      cv,
+    })
+    return c.json({ success: true, data: { id: data?._id } })
+  } catch (error) {
+    if (isMysqlConnectError(error)) return c.json({ success: false, message: 'Could not send your application right now. Please try again shortly.' }, 503)
+    return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not submit application' }, 400)
+  }
+})
 app.get('/api/jobs/:slug', async (c) => {
   const job = await getJobBySlug(c.req.param('slug'))
   if (!job) return c.json({ success: false, message: 'Job not found' }, 404)
@@ -835,6 +862,57 @@ app.delete('/api/admin/jobs/:id', async (c) => {
   if (!removed) return c.json({ success: false, message: 'Job not found' }, 404)
   if (removed.image?.publicId?.startsWith('mysql:')) await mysqlDeleteFile(removed.image.publicId).catch(() => undefined)
   return c.json({ success: true })
+})
+
+app.get('/api/admin/job-applications', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  try {
+    return c.json({ success: true, data: await listJobApplications() })
+  } catch (error) {
+    if (isMysqlConnectError(error)) return c.json({ success: true, data: [] })
+    return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not load applications' }, 500)
+  }
+})
+
+app.get('/api/admin/job-applications/:id/cv', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  const file = await getJobApplicationCv(c.req.param('id'))
+  if (!file) return c.json({ success: false, message: 'CV not found' }, 404)
+  const name = (file.downloadName || 'cv.pdf').replace(/"/g, '')
+  return new Response(new Uint8Array(file.data), {
+    headers: {
+      'Content-Type': file.mime || 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="${name}"`,
+      'Cache-Control': 'private, no-store',
+    },
+  })
+})
+
+app.patch('/api/admin/job-applications/:id', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  const body = await c.req.json().catch(() => ({})) as { status?: string }
+  const status = body.status === 'reviewed' ? 'reviewed' : body.status === 'new' ? 'new' : null
+  if (!status) return c.json({ success: false, message: 'status must be new or reviewed' }, 400)
+  try {
+    const data = await updateJobApplicationStatus(c.req.param('id'), status)
+    return c.json({ success: true, data })
+  } catch (error) {
+    return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not update application' }, 400)
+  }
+})
+
+app.delete('/api/admin/job-applications/:id', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  try {
+    await deleteJobApplication(c.req.param('id'))
+    return c.json({ success: true })
+  } catch (error) {
+    return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not delete application' }, 400)
+  }
 })
 
 app.get('/api/admin/settings', async (c) => {

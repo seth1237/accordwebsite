@@ -3,6 +3,39 @@ export type JobImage = {
   secureUrl: string
 }
 
+export const JOB_DEPARTMENTS = [
+  'Accounts',
+  'Management',
+  'Delivery',
+  'Warehouse Management',
+  'IT',
+  'Marketing',
+  'Digital Marketing',
+  'Human Resource',
+  'Sales',
+  'Technical Service',
+  'Technical Sales Engineer',
+] as const
+
+export const JOB_WORKING_TERMS = ['Internship', 'Full time', 'Part time'] as const
+
+export type JobDepartment = (typeof JOB_DEPARTMENTS)[number]
+export type JobWorkingTerms = (typeof JOB_WORKING_TERMS)[number]
+
+export type JobApplication = {
+  _id: string
+  fullName: string
+  email: string
+  phone: string
+  department: string
+  workingTerms: string
+  notes: string
+  cvFilename: string
+  cvFileId: number | null
+  status: 'new' | 'reviewed'
+  createdAt: string
+}
+
 export type JobPost = {
   _id: string
   title: string

@@ -60,7 +60,8 @@ export default async function VacancyPage({ params }: { params: Promise<{ slug: 
           </div>
         )}
         <div className="job-card-actions">
-          <a href={apply} className="button button-primary">Apply</a>
+          <a href={apply} className="button button-primary">Apply by email</a>
+          <a href={ROUTES.jobsApply} className="button button-outline">Send your CV</a>
           <JobShare job={job} />
         </div>
       </section>

@@ -176,6 +176,8 @@
 .admin-job-preview img { width: 96px; height: 72px; object-fit: cover; border-radius: 8px; background: #eef3f2; }
 .admin-check { display: flex !important; flex-direction: row !important; align-items: center; gap: 8px; font-weight: 600; }
 .admin-job-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.admin-application-meta { margin: 0; font-size: 13px; color: #123744; }
+.admin-application-notes { margin: 0; white-space: pre-wrap; font-size: 13px; font-weight: 400; color: #60767d; }
 .offer-picker { display: grid; gap: 10px; }
 .offer-picked { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
 .offer-price-rows { display: grid; gap: 10px; }

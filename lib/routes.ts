@@ -4,6 +4,7 @@ export const ROUTES = {
   products: '/products',
   projects: '/projects',
   jobs: '/jobs',
+  jobsApply: '/jobs/apply',
   news: '/news',
   contact: '/get-in-touch/contact',
   cart: '/cart/view',

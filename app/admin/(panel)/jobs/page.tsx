@@ -1,9 +1,12 @@
 import { AdminJobsPanel } from '@/components/admin-jobs-panel'
-import { listJobs } from '@/lib/site-data'
+import { listJobApplications, listJobs } from '@/lib/site-data'
 
 export const dynamic = 'force-dynamic'
 
 export default async function AdminJobsPage() {
-  const jobs = await listJobs(false).catch(() => [])
-  return <AdminJobsPanel jobs={jobs} />
+  const [jobs, applications] = await Promise.all([
+    listJobs(false).catch(() => []),
+    listJobApplications().catch(() => []),
+  ])
+  return <AdminJobsPanel jobs={jobs} applications={applications} />
 }

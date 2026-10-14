@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import type { JobPost } from '@/lib/jobs'
+import type { JobApplication, JobPost } from '@/lib/jobs'
+import { AdminJobApplications } from '@/components/admin-job-applications'
 import { COMPANY } from '@/lib/utils'
 
 const TYPES = ['Full time', 'Part time', 'Contract', 'Internship']
@@ -19,7 +20,7 @@ const empty = {
   published: true,
 }
 
-export function AdminJobsPanel({ jobs }: { jobs: JobPost[] }) {
+export function AdminJobsPanel({ jobs, applications = [] }: { jobs: JobPost[]; applications?: JobApplication[] }) {
   const router = useRouter()
   const [selectedId, setSelectedId] = useState<string | 'new' | null>(null)
   const [message, setMessage] = useState('')
@@ -75,6 +76,7 @@ export function AdminJobsPanel({ jobs }: { jobs: JobPost[] }) {
         </button>
       </header>
       {message && <p className="admin-message">{message}</p>}
+      <AdminJobApplications applications={applications} />
       <div className="admin-card">
         <div className="card-title">
           <div>

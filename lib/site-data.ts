@@ -3,7 +3,7 @@ import { cookies } from 'next/headers'
 import { accordApiPath } from '@/lib/backend-url'
 import type { Catalog, CatalogProduct } from '@/lib/catalog'
 import type { Catalogue, CompanyProfilePage, EventPost, Installation, ManufacturerSubmission, Offer, RedirectRule } from '@/lib/content'
-import type { JobPost } from '@/lib/jobs'
+import type { JobApplication, JobPost } from '@/lib/jobs'
 import { emptyVisitorReport, parsePeriod, type VisitorPeriod } from '@/lib/visitor-report'
 
 type Bootstrap = {
@@ -138,6 +138,11 @@ export async function getPriceVisibility() {
 export async function listJobs(publishedOnly = false): Promise<JobPost[]> {
   const path = publishedOnly ? '/api/jobs' : '/api/admin/jobs'
   const payload = await backendJson<{ data: JobPost[] }>(path)
+  return payload?.data || []
+}
+
+export async function listJobApplications(): Promise<JobApplication[]> {
+  const payload = await backendJson<{ data: JobApplication[] }>('/api/admin/job-applications')
   return payload?.data || []
 }
 

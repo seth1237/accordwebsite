@@ -3,6 +3,7 @@ import mysql, { type Pool, type ResultSetHeader, type RowDataPacket } from 'mysq
 import type { Catalogue, CatalogueDownload, CompanyProfilePage, MediaAsset, OfferEvent } from '@/lib/content'
 import type { CatalogCategory, CatalogProduct } from '@/lib/catalog'
 import { publicCategorySlug, slugifyName } from '@/lib/catalog'
+import type { JobApplication } from '@/lib/jobs'
 import { clampRange, defaultRange, fillVisitorSeries, isIsoDate, monthStart, parsePeriod, weekStart } from '@/lib/visitor-report'
 
 setDefaultResultOrder('ipv4first')
@@ -33,7 +34,7 @@ type SiteSettings = {
   updatedAt: Date
 }
 
-const MYSQL_SCHEMA_VERSION = 10
+const MYSQL_SCHEMA_VERSION = 11
 
 type MysqlState = {
   pool: Pool | null
@@ -416,6 +417,23 @@ async function applyMysqlSchema() {
       KEY product_type_created (product_id, event_type, created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
   `)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS accord_nx_job_applications (
+      id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+      full_name VARCHAR(191) NOT NULL,
+      email VARCHAR(191) NOT NULL,
+      phone VARCHAR(64) NOT NULL DEFAULT '',
+      department VARCHAR(128) NOT NULL,
+      working_terms VARCHAR(64) NOT NULL,
+      notes MEDIUMTEXT NOT NULL,
+      cv_file_id INT UNSIGNED NULL,
+      cv_filename VARCHAR(255) NOT NULL DEFAULT '',
+      status VARCHAR(32) NOT NULL DEFAULT 'new',
+      created_at DATETIME NOT NULL,
+      PRIMARY KEY (id),
+      KEY status_created (status, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+  `)
 }
 
 export async function ensureMysqlSchema() {
@@ -553,6 +571,125 @@ export async function mysqlGetFile(id: string | number) {
     mime: row.mime,
     data: Buffer.isBuffer(row.file_data) ? row.file_data : Buffer.from(row.file_data || []),
   }
+}
+
+type JobApplicationRow = RowDataPacket & {
+  id: number
+  full_name: string
+  email: string
+  phone: string
+  department: string
+  working_terms: string
+  notes: string
+  cv_file_id: number | null
+  cv_filename: string
+  status: string
+  created_at: Date | string
+}
+
+function mapJobApplication(row: JobApplicationRow): JobApplication {
+  return {
+    _id: String(row.id),
+    fullName: String(row.full_name || ''),
+    email: String(row.email || ''),
+    phone: String(row.phone || ''),
+    department: String(row.department || ''),
+    workingTerms: String(row.working_terms || ''),
+    notes: String(row.notes || ''),
+    cvFilename: String(row.cv_filename || ''),
+    cvFileId: mysqlId(row.cv_file_id),
+    status: row.status === 'reviewed' ? 'reviewed' : 'new',
+    createdAt: iso(row.created_at),
+  }
+}
+
+export async function mysqlCreateJobApplication(input: {
+  fullName: string
+  email: string
+  phone: string
+  department: string
+  workingTerms: string
+  notes?: string
+  cv: { buffer: Buffer; filename: string; mime: string }
+}) {
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const now = new Date()
+  const [result] = await pool.query<ResultSetHeader>(
+    `INSERT INTO accord_nx_job_applications
+      (full_name, email, phone, department, working_terms, notes, cv_file_id, cv_filename, status, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, NULL, '', 'new', ?)`,
+    [input.fullName, input.email, input.phone, input.department, input.workingTerms, String(input.notes || '').trim(), now],
+  )
+  const id = String(result.insertId)
+  try {
+    const saved = await mysqlSaveFile({
+      kind: 'job-cv',
+      ownerKey: id,
+      filename: input.cv.filename,
+      mime: input.cv.mime,
+      buffer: input.cv.buffer,
+    })
+    const fileId = mysqlFileIdFromPublicId(saved.publicId)
+    await pool.query(
+      'UPDATE accord_nx_job_applications SET cv_file_id = ?, cv_filename = ? WHERE id = ?',
+      [fileId, input.cv.filename, result.insertId],
+    )
+  } catch (error) {
+    await pool.query('DELETE FROM accord_nx_job_applications WHERE id = ?', [result.insertId])
+    throw error
+  }
+  const created = await mysqlGetJobApplication(id)
+  if (!created) throw new Error('Could not save application')
+  return created
+}
+
+export async function mysqlListJobApplications(): Promise<JobApplication[]> {
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const [rows] = await pool.query<JobApplicationRow[]>(
+    `SELECT id, full_name, email, phone, department, working_terms, notes, cv_file_id, cv_filename, status, created_at
+     FROM accord_nx_job_applications ORDER BY created_at DESC`,
+  )
+  return rows.map(mapJobApplication)
+}
+
+export async function mysqlGetJobApplication(id: string) {
+  const applicationId = mysqlId(id)
+  if (!applicationId) return null
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const [rows] = await pool.query<JobApplicationRow[]>(
+    `SELECT id, full_name, email, phone, department, working_terms, notes, cv_file_id, cv_filename, status, created_at
+     FROM accord_nx_job_applications WHERE id = ? LIMIT 1`,
+    [applicationId],
+  )
+  return rows[0] ? mapJobApplication(rows[0]) : null
+}
+
+export async function mysqlUpdateJobApplicationStatus(id: string, status: 'new' | 'reviewed') {
+  const existing = await mysqlGetJobApplication(id)
+  if (!existing) return null
+  const pool = await getPool()
+  await pool.query('UPDATE accord_nx_job_applications SET status = ? WHERE id = ?', [status, mysqlId(id)])
+  return mysqlGetJobApplication(id)
+}
+
+export async function mysqlDeleteJobApplication(id: string) {
+  const existing = await mysqlGetJobApplication(id)
+  if (!existing) return null
+  const pool = await getPool()
+  await pool.query('DELETE FROM accord_nx_job_applications WHERE id = ?', [mysqlId(id)])
+  if (existing.cvFileId) await mysqlDeleteFile(String(existing.cvFileId)).catch(() => false)
+  return existing
+}
+
+export async function mysqlGetJobApplicationCv(id: string) {
+  const existing = await mysqlGetJobApplication(id)
+  if (!existing?.cvFileId) return null
+  const file = await mysqlGetFile(existing.cvFileId)
+  if (!file || file.kind !== 'job-cv') return null
+  return { ...file, downloadName: existing.cvFilename || file.filename || 'cv.pdf' }
 }
 
 export async function mysqlDeleteFile(publicIdOrId: string) {

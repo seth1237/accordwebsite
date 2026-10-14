@@ -30,6 +30,29 @@ export async function uploadFormImage(file: FormDataEntryValue | null, folder: s
   return { publicId: uploaded.public_id, secureUrl: uploaded.secure_url }
 }
 
+const CV_TYPES = new Set([
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+])
+
+export function isCvFile(file: File) {
+  const name = file.name.toLowerCase()
+  return CV_TYPES.has(file.type) || name.endsWith('.pdf') || name.endsWith('.doc') || name.endsWith('.docx')
+}
+
+export async function uploadFormCv(file: FormDataEntryValue | null) {
+  if (!(file instanceof File) || file.size <= 0) return null
+  if (file.size > 8 * 1024 * 1024) throw new Error('Upload a CV under 8MB')
+  if (!isCvFile(file)) throw new Error('Upload a PDF or Word CV')
+  const filename = (file.name || 'cv.pdf').replace(/[/\\]/g, '').slice(0, 180) || 'cv.pdf'
+  return {
+    buffer: Buffer.from(await file.arrayBuffer()),
+    filename,
+    mime: file.type || (filename.endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream'),
+  }
+}
+
 export async function uploadFormDocument(file: FormDataEntryValue | null, folder: string, id: string): Promise<MediaAsset | null> {
   if (!(file instanceof File) || file.size <= 0) return null
   if (file.size > 20 * 1024 * 1024) throw new Error('Upload a PDF under 20MB')
