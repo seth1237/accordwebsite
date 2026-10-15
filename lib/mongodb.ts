@@ -1,5 +1,6 @@
 import { MongoClient, ObjectId, type Collection, type Db } from 'mongodb'
 import type { JobImage, JobPost } from '@/lib/jobs'
+import { emptySearchReport, parsePeriod as parseSearchPeriod, type SearchEventInput } from '@/lib/search-analytics'
 import { emptyVisitorReport, parsePeriod } from '@/lib/visitor-report'
 import {
   isMysqlConfigured,
@@ -17,10 +18,13 @@ import {
   mysqlGetSiteSettings,
   mysqlInsertDoc,
   mysqlListDocs,
+  mysqlListSearchExport,
   mysqlRecordProductClick,
   mysqlRecordProductShare,
   mysqlRecordProductCart,
+  mysqlRecordSearchEvent,
   mysqlRecordSiteVisit,
+  mysqlGetSearchReport,
   mysqlGetVisitorReport,
   mysqlGetVisitorStats,
   mysqlRemoveProductImage,
@@ -595,6 +599,32 @@ export async function getVisitorStats(days = 90) {
 export async function getVisitorReport(input: { period?: unknown; from?: unknown; to?: unknown } = {}) {
   if (isMysqlConfigured()) return mysqlGetVisitorReport(input)
   return emptyVisitorReport(parsePeriod(input.period))
+}
+
+export async function recordSearchEvent(input: SearchEventInput) {
+  if (isMysqlConfigured()) await mysqlRecordSearchEvent(input)
+}
+
+export async function getSearchReport(input: {
+  period?: unknown
+  from?: unknown
+  to?: unknown
+  q?: unknown
+  kind?: unknown
+} = {}) {
+  if (isMysqlConfigured()) return mysqlGetSearchReport(input)
+  return emptySearchReport(parseSearchPeriod(input.period))
+}
+
+export async function listSearchExport(input: {
+  period?: unknown
+  from?: unknown
+  to?: unknown
+  q?: unknown
+  kind?: unknown
+} = {}) {
+  if (isMysqlConfigured()) return mysqlListSearchExport(input)
+  return []
 }
 
 type JobDoc = Omit<JobPost, '_id' | 'createdAt' | 'updatedAt'> & {

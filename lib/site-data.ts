@@ -4,6 +4,7 @@ import { accordApiPath } from '@/lib/backend-url'
 import type { Catalog, CatalogProduct } from '@/lib/catalog'
 import type { Catalogue, CompanyProfilePage, EventPost, Installation, ManufacturerSubmission, Offer, RedirectRule } from '@/lib/content'
 import type { JobApplication, JobPost } from '@/lib/jobs'
+import { emptySearchReport, parsePeriod as parseSearchPeriod, parseSearchKind, type SearchKind } from '@/lib/search-analytics'
 import { emptyVisitorReport, parsePeriod, type VisitorPeriod } from '@/lib/visitor-report'
 
 type Bootstrap = {
@@ -247,6 +248,24 @@ export async function getVisitorReport(query?: { period?: VisitorPeriod; from?: 
   if (query?.to) params.set('to', query.to)
   const payload = await backendJson<{ data: Awaited<ReturnType<typeof import('@/lib/mongodb').getVisitorReport>> }>(`/api/admin/visitors?${params}`)
   return payload?.data || emptyVisitorReport(period)
+}
+
+export async function getSearchReport(query?: {
+  period?: VisitorPeriod
+  from?: string
+  to?: string
+  q?: string
+  kind?: SearchKind
+}) {
+  const period = parseSearchPeriod(query?.period)
+  const params = new URLSearchParams()
+  params.set('period', period)
+  if (query?.from) params.set('from', query.from)
+  if (query?.to) params.set('to', query.to)
+  if (query?.q) params.set('q', query.q)
+  if (query?.kind) params.set('kind', parseSearchKind(query.kind))
+  const payload = await backendJson<{ data: Awaited<ReturnType<typeof import('@/lib/mongodb').getSearchReport>> }>(`/api/admin/search?${params}`)
+  return payload?.data || emptySearchReport(period)
 }
 
 export async function siteJobCount() {

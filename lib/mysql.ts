@@ -5,6 +5,19 @@ import type { CatalogCategory, CatalogProduct } from '@/lib/catalog'
 import { publicCategorySlug, slugifyName } from '@/lib/catalog'
 import type { JobApplication } from '@/lib/jobs'
 import { clampRange, defaultRange, fillVisitorSeries, isIsoDate, monthStart, parsePeriod, weekStart } from '@/lib/visitor-report'
+import {
+  fillSearchSeries,
+  isPrefixSearchUpdate,
+  normalizeSearchQuery,
+  parseSearchKind,
+  searchActivityLabel,
+  searchEventLabel,
+  searchQueryKey,
+  searchRange,
+  type SearchEventInput,
+  type SearchHistoryRow,
+  type SearchReport,
+} from '@/lib/search-analytics'
 
 setDefaultResultOrder('ipv4first')
 
@@ -34,7 +47,7 @@ type SiteSettings = {
   updatedAt: Date
 }
 
-const MYSQL_SCHEMA_VERSION = 11
+const MYSQL_SCHEMA_VERSION = 12
 
 type MysqlState = {
   pool: Pool | null
@@ -434,6 +447,31 @@ async function applyMysqlSchema() {
       KEY status_created (status, created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
   `)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS accord_nx_search_events (
+      id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+      query_raw VARCHAR(191) NOT NULL,
+      query_norm VARCHAR(191) NOT NULL,
+      result_count INT NOT NULL DEFAULT 0,
+      matched TINYINT(1) NOT NULL DEFAULT 0,
+      source VARCHAR(32) NOT NULL DEFAULT 'live',
+      trigger_name VARCHAR(32) NOT NULL DEFAULT 'idle',
+      path VARCHAR(255) NOT NULL DEFAULT '',
+      visitor_id VARCHAR(64) NOT NULL DEFAULT '',
+      session_id VARCHAR(64) NOT NULL DEFAULT '',
+      product_id VARCHAR(64) NOT NULL DEFAULT '',
+      search_date DATE NOT NULL,
+      created_at DATETIME NOT NULL,
+      updated_at DATETIME NOT NULL,
+      PRIMARY KEY (id),
+      KEY query_norm (query_norm),
+      KEY matched_created (matched, created_at),
+      KEY visitor_created (visitor_id, created_at),
+      KEY search_date (search_date),
+      KEY created_at (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+  `)
+  await mysqlAddColumnIfMissing('accord_nx_search_events', 'search_date', `search_date DATE NULL`)
 }
 
 export async function ensureMysqlSchema() {
@@ -1693,6 +1731,237 @@ export async function mysqlRecordSiteVisit(input: { visitorId: string; path: str
      ON DUPLICATE KEY UPDATE hits = hits + 1, last_seen_at = VALUES(last_seen_at)`,
     [nairobiDate(now), visitorId, path, now],
   )
+}
+
+function searchTriggerName(value: unknown) {
+  const trigger = String(value || '').trim()
+  return trigger === 'blur' || trigger === 'pagehide' || trigger === 'submit' || trigger === 'result' ? trigger : 'idle'
+}
+
+function mapSearchHistory(row: RowDataPacket): SearchHistoryRow {
+  const matched = Boolean(row.matched)
+  const source = row.source === 'error' ? 'error' : 'live'
+  const trigger = searchTriggerName(row.trigger_name)
+  return {
+    id: String(row.id),
+    query: String(row.query_raw || ''),
+    resultCount: Number(row.result_count) || 0,
+    matched,
+    source,
+    trigger,
+    path: String(row.path || ''),
+    createdAt: iso(row.updated_at || row.created_at),
+    eventLabel: searchEventLabel(matched, source),
+    activityLabel: searchActivityLabel(trigger),
+  }
+}
+
+export async function mysqlRecordSearchEvent(input: SearchEventInput) {
+  const queryRaw = normalizeSearchQuery(input.query)
+  const queryNorm = searchQueryKey(queryRaw)
+  if (queryNorm.length < 2) return
+  const visitorId = sanitizeVisitorId(input.visitorId)
+  const sessionId = sanitizeVisitorId(input.sessionId) || visitorId
+  const path = sanitizeVisitPath(input.path) || '/'
+  const source = input.catalogReady === false ? 'error' : 'live'
+  const resultCount = source === 'error' ? 0 : Math.max(0, Number(input.resultCount) || 0)
+  const matched = source === 'live' && resultCount > 0 ? 1 : 0
+  const trigger = searchTriggerName(input.trigger)
+  const productId = String(input.productId || '').trim().slice(0, 64)
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const now = new Date()
+  const day = nairobiDate(now)
+  if (visitorId) {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `SELECT id, query_norm FROM accord_nx_search_events
+       WHERE visitor_id = ? AND created_at >= DATE_SUB(?, INTERVAL 2 MINUTE)
+       ORDER BY id DESC LIMIT 1`,
+      [visitorId, now],
+    )
+    const previous = rows[0]
+    if (previous && isPrefixSearchUpdate(String(previous.query_norm || ''), queryNorm)) {
+      await pool.query(
+        `UPDATE accord_nx_search_events
+         SET query_raw = ?, query_norm = ?, result_count = ?, matched = ?, source = ?, trigger_name = ?,
+             path = ?, session_id = ?, product_id = IF(? <> '', ?, product_id), search_date = ?, updated_at = ?
+         WHERE id = ?`,
+        [queryRaw, queryNorm, resultCount, matched, source, trigger, path, sessionId, productId, productId, day, now, previous.id],
+      )
+      return
+    }
+  }
+  await pool.query(
+    `INSERT INTO accord_nx_search_events
+      (query_raw, query_norm, result_count, matched, source, trigger_name, path, visitor_id, session_id, product_id, search_date, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [queryRaw, queryNorm, resultCount, matched, source, trigger, path, visitorId, sessionId, productId, day, now, now],
+  )
+}
+
+export async function mysqlGetSearchReport(input: {
+  period?: unknown
+  from?: unknown
+  to?: unknown
+  q?: unknown
+  kind?: unknown
+} = {}): Promise<SearchReport> {
+  const period = parsePeriod(input.period)
+  const range = searchRange(period, String(input.from || ''), String(input.to || ''))
+  const kind = parseSearchKind(input.kind)
+  const needle = searchQueryKey(input.q)
+  const bucket = period === 'weekly'
+    ? `DATE_FORMAT(DATE_SUB(search_date, INTERVAL WEEKDAY(search_date) DAY), '%Y-%m-%d')`
+    : period === 'monthly'
+      ? `DATE_FORMAT(search_date, '%Y-%m-01')`
+      : `DATE_FORMAT(search_date, '%Y-%m-%d')`
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const filters = ['search_date BETWEEN ? AND ?']
+  const params: Array<string | number> = [range.from, range.to]
+  if (needle) {
+    filters.push('query_norm LIKE ?')
+    params.push(`%${needle}%`)
+  }
+  if (kind === 'matched') filters.push(`matched = 1 AND source = 'live'`)
+  if (kind === 'unmet') filters.push(`matched = 0 AND source = 'live'`)
+  const where = filters.join(' AND ')
+
+  const [totalRows, seriesRows, unmetRows, matchedRows, historyRows] = await Promise.all([
+    pool.query<RowDataPacket[]>(
+      `SELECT COUNT(*) AS searches,
+              COUNT(DISTINCT query_norm) AS unique_queries,
+              COUNT(DISTINCT IF(session_id = '', visitor_id, session_id)) AS unique_sessions,
+              SUM(matched = 1 AND source = 'live') AS matched,
+              SUM(matched = 0 AND source = 'live') AS unmatched
+       FROM accord_nx_search_events
+       WHERE ${where}`,
+      params,
+    ),
+    pool.query<RowDataPacket[]>(
+      `SELECT ${bucket} AS date,
+              COUNT(*) AS searches,
+              SUM(matched = 1 AND source = 'live') AS matched,
+              SUM(matched = 0 AND source = 'live') AS unmatched
+       FROM accord_nx_search_events
+       WHERE ${where}
+       GROUP BY ${bucket}
+       ORDER BY date ASC`,
+      params,
+    ),
+    pool.query<RowDataPacket[]>(
+      `SELECT SUBSTRING_INDEX(GROUP_CONCAT(query_raw ORDER BY CHAR_LENGTH(query_raw) DESC SEPARATOR 0x1F), 0x1F, 1) AS query_raw,
+              query_norm,
+              COUNT(*) AS searches,
+              COUNT(DISTINCT IF(session_id = '', visitor_id, session_id)) AS sessions,
+              MAX(result_count) AS result_count,
+              MAX(updated_at) AS last_at,
+              SUBSTRING_INDEX(GROUP_CONCAT(trigger_name ORDER BY updated_at DESC), ',', 1) AS trigger_name
+       FROM accord_nx_search_events
+       WHERE ${where} AND matched = 0 AND source = 'live'
+       GROUP BY query_norm
+       ORDER BY sessions DESC, searches DESC, last_at DESC
+       LIMIT 40`,
+      params,
+    ),
+    pool.query<RowDataPacket[]>(
+      `SELECT SUBSTRING_INDEX(GROUP_CONCAT(query_raw ORDER BY CHAR_LENGTH(query_raw) DESC SEPARATOR 0x1F), 0x1F, 1) AS query_raw,
+              query_norm,
+              COUNT(*) AS searches,
+              COUNT(DISTINCT IF(session_id = '', visitor_id, session_id)) AS sessions,
+              MAX(result_count) AS result_count,
+              MAX(updated_at) AS last_at,
+              SUBSTRING_INDEX(GROUP_CONCAT(trigger_name ORDER BY updated_at DESC), ',', 1) AS trigger_name
+       FROM accord_nx_search_events
+       WHERE ${where} AND matched = 1 AND source = 'live'
+       GROUP BY query_norm
+       ORDER BY searches DESC, sessions DESC, last_at DESC
+       LIMIT 40`,
+      params,
+    ),
+    pool.query<RowDataPacket[]>(
+      `SELECT id, query_raw, result_count, matched, source, trigger_name, path, created_at, updated_at
+       FROM accord_nx_search_events
+       WHERE ${where}
+       ORDER BY updated_at DESC
+       LIMIT 80`,
+      params,
+    ),
+  ])
+
+  const totals = totalRows[0][0]
+  return {
+    period,
+    from: range.from,
+    to: range.to,
+    totals: {
+      searches: Number(totals?.searches) || 0,
+      uniqueQueries: Number(totals?.unique_queries) || 0,
+      uniqueSessions: Number(totals?.unique_sessions) || 0,
+      matched: Number(totals?.matched) || 0,
+      unmatched: Number(totals?.unmatched) || 0,
+    },
+    series: fillSearchSeries(
+      period,
+      range.from,
+      range.to,
+      seriesRows[0].map((row) => ({
+        date: String(row.date || ''),
+        searches: Number(row.searches) || 0,
+        matched: Number(row.matched) || 0,
+        unmatched: Number(row.unmatched) || 0,
+      })),
+    ),
+    unmet: unmetRows[0].map((row) => ({
+      query: String(row.query_raw || row.query_norm || ''),
+      searches: Number(row.searches) || 0,
+      sessions: Number(row.sessions) || 0,
+      resultCount: Number(row.result_count) || 0,
+      lastAt: iso(row.last_at),
+      activityLabel: searchActivityLabel(String(row.trigger_name || '')),
+    })),
+    matched: matchedRows[0].map((row) => ({
+      query: String(row.query_raw || row.query_norm || ''),
+      searches: Number(row.searches) || 0,
+      sessions: Number(row.sessions) || 0,
+      resultCount: Number(row.result_count) || 0,
+      lastAt: iso(row.last_at),
+      activityLabel: searchActivityLabel(String(row.trigger_name || '')),
+    })),
+    history: historyRows[0].map(mapSearchHistory),
+  }
+}
+
+export async function mysqlListSearchExport(input: {
+  period?: unknown
+  from?: unknown
+  to?: unknown
+  q?: unknown
+  kind?: unknown
+} = {}): Promise<SearchHistoryRow[]> {
+  const period = parsePeriod(input.period)
+  const range = searchRange(period, String(input.from || ''), String(input.to || ''))
+  const kind = parseSearchKind(input.kind)
+  const needle = searchQueryKey(input.q)
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const filters = ['search_date BETWEEN ? AND ?']
+  const params: Array<string | number> = [range.from, range.to]
+  if (needle) {
+    filters.push('query_norm LIKE ?')
+    params.push(`%${needle}%`)
+  }
+  if (kind === 'matched') filters.push(`matched = 1 AND source = 'live'`)
+  if (kind === 'unmet') filters.push(`matched = 0 AND source = 'live'`)
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT id, query_raw, result_count, matched, source, trigger_name, path, created_at, updated_at
+     FROM accord_nx_search_events
+     WHERE ${filters.join(' AND ')}
+     ORDER BY updated_at DESC
+     LIMIT 2000`,
+    params,
+  )
+  return rows.map(mapSearchHistory)
 }
 
 export type VisitorDay = {

@@ -5,6 +5,44 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { Search } from 'lucide-react'
 import { productHref, type SearchProduct } from '@/lib/catalog'
+import type { SearchTrigger } from '@/lib/search-analytics'
+
+const VISITOR_KEY = 'accord_vid'
+const SESSION_KEY = 'accord_sid'
+
+function matchingProducts(products: SearchProduct[], query: string) {
+  const q = query.trim().toLowerCase()
+  if (!q) return []
+  return products.filter((product) =>
+    `${product.name} ${product.categoryName} ${product.manufacturer || ''} ${product.productType || ''} ${product.description || ''}`
+      .toLowerCase()
+      .includes(q),
+  )
+}
+
+function visitorId() {
+  try {
+    const existing = localStorage.getItem(VISITOR_KEY)
+    if (existing) return existing
+    const created = crypto.randomUUID()
+    localStorage.setItem(VISITOR_KEY, created)
+    return created
+  } catch {
+    return ''
+  }
+}
+
+function sessionId() {
+  try {
+    const existing = sessionStorage.getItem(SESSION_KEY)
+    if (existing) return existing
+    const created = crypto.randomUUID()
+    sessionStorage.setItem(SESSION_KEY, created)
+    return created
+  } catch {
+    return visitorId()
+  }
+}
 
 export function SearchBox({
   products,
@@ -16,21 +54,49 @@ export function SearchBox({
   const router = useRouter()
   const pathname = usePathname()
   const wrapRef = useRef<HTMLDivElement>(null)
+  const queryRef = useRef('')
+  const productsRef = useRef(products)
+  const pathnameRef = useRef(pathname)
+  const lastSent = useRef({ key: '', at: 0 })
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const [dirty, setDirty] = useState(false)
 
-  const matches = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (q.length < 1) return []
-    return products
-      .filter((product) =>
-        `${product.name} ${product.categoryName} ${product.manufacturer || ''} ${product.productType || ''} ${product.description || ''}`
-          .toLowerCase()
-          .includes(q),
-      )
-      .slice(0, 8)
-  }, [products, query])
+  queryRef.current = query
+  productsRef.current = products
+  pathnameRef.current = pathname
+
+  const allMatches = useMemo(() => matchingProducts(products, query), [products, query])
+  const matches = allMatches.slice(0, 8)
+
+  function sendSearch(trigger: SearchTrigger, productId = '') {
+    const raw = queryRef.current.replace(/\s+/g, ' ').trim()
+    if (raw.length < 2) return
+    const catalog = productsRef.current
+    const resultCount = matchingProducts(catalog, raw).length
+    const key = `${raw.toLowerCase()}|${resultCount}|${catalog.length > 0 ? 'live' : 'error'}`
+    const now = Date.now()
+    if (trigger !== 'result' && trigger !== 'submit' && lastSent.current.key === key && now - lastSent.current.at < 5000) {
+      return
+    }
+    lastSent.current = { key, at: now }
+    const body = JSON.stringify({
+      query: raw.slice(0, 120),
+      resultCount,
+      catalogReady: catalog.length > 0,
+      trigger,
+      path: pathnameRef.current || '/',
+      visitorId: visitorId(),
+      sessionId: sessionId(),
+      productId,
+    })
+    void fetch('/api/analytics/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+      keepalive: true,
+    }).catch(() => null)
+  }
 
   useEffect(() => {
     function onDocClick(event: MouseEvent) {
@@ -50,7 +116,29 @@ export function SearchBox({
     return () => window.clearTimeout(timer)
   }, [query, pathname, router, dirty])
 
+  useEffect(() => {
+    if (query.trim().length < 2) return
+    const timer = window.setTimeout(() => sendSearch('idle'), 800)
+    return () => window.clearTimeout(timer)
+  }, [query])
+
+  useEffect(() => {
+    function onPageHide() {
+      sendSearch('pagehide')
+    }
+    function onVisibility() {
+      if (document.visibilityState === 'hidden') sendSearch('pagehide')
+    }
+    window.addEventListener('pagehide', onPageHide)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('pagehide', onPageHide)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [])
+
   function goToResults() {
+    sendSearch('submit')
     const q = query.trim()
     router.push(q ? `/products?q=${encodeURIComponent(q)}` : '/products')
     setOpen(false)
@@ -74,6 +162,7 @@ export function SearchBox({
             setOpen(true)
           }}
           onFocus={() => setOpen(true)}
+          onBlur={() => sendSearch('blur')}
           placeholder="Search products"
           aria-label="Search products"
           aria-autocomplete="list"
@@ -89,6 +178,7 @@ export function SearchBox({
               href={productHref(product)}
               className="search-result"
               onClick={() => {
+                sendSearch('result', product.id)
                 setOpen(false)
                 onNavigate?.()
               }}

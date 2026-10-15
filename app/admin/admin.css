@@ -496,3 +496,31 @@
 .admin-seo-score li.ok { color: #188038; }
 .admin-seo-score li.warn { color: #c27a00; }
 .admin-seo-score li.missing { color: #c62828; }
+.search-kpis { grid-template-columns: repeat(5, 1fr); }
+.search-demand-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+.search-demand { margin-bottom: 0; }
+.search-history-wrap { max-height: 420px; }
+.search-history th:nth-child(n+2),
+.search-history td:nth-child(n+2) { text-align: left; }
+.search-history th:nth-child(4),
+.search-history td:nth-child(4) { text-align: right; }
+.visitor-range input[type='search'] {
+  border: 1px solid #c5d5d2;
+  background: #fff;
+  color: #123744;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  min-width: 160px;
+  border-radius: 0;
+}
+@media (max-width: 900px) {
+  .search-demand-grid { grid-template-columns: 1fr; }
+  .search-kpis { grid-template-columns: 1fr 1fr; }
+}

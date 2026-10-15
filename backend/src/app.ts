@@ -68,12 +68,15 @@ import {
   getJobById,
   getJobBySlug,
   getSiteSettings,
+  getSearchReport,
   getVisitorReport,
   getVisitorStats,
   listJobs,
+  listSearchExport,
   recordProductCart,
   recordProductClick,
   recordProductShare,
+  recordSearchEvent,
   recordSiteVisit,
   removeProductImage,
   setProductImageInstallation,
@@ -81,6 +84,7 @@ import {
   updateProductDetails,
   updateSiteSettings,
 } from '../../lib/mongodb'
+import { emptySearchReport, parsePeriod as parseSearchPeriod, searchReportToExcelXml } from '../../lib/search-analytics'
 import { emptyVisitorReport, parsePeriod } from '../../lib/visitor-report'
 import {
   isMysqlConfigured,
@@ -503,6 +507,29 @@ app.post('/api/analytics/visit', async (c) => {
   } catch (error) {
     if (isMysqlConnectError(error)) return c.json({ success: true })
     return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not record visit' }, 500)
+  }
+})
+
+app.post('/api/analytics/search', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}))
+    const triggerRaw = textValue(body.trigger, 32)
+    await recordSearchEvent({
+      query: textValue(body.query, 120),
+      resultCount: Number(body.resultCount) || 0,
+      catalogReady: body.catalogReady !== false,
+      trigger: triggerRaw === 'blur' || triggerRaw === 'pagehide' || triggerRaw === 'submit' || triggerRaw === 'result'
+        ? triggerRaw
+        : 'idle',
+      path: textValue(body.path, 255),
+      visitorId: textValue(body.visitorId, 64),
+      sessionId: textValue(body.sessionId, 64),
+      productId: textValue(body.productId, 64),
+    })
+    return c.json({ success: true })
+  } catch (error) {
+    if (isMysqlConnectError(error)) return c.json({ success: true })
+    return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not record search' }, 500)
   }
 })
 
@@ -1119,6 +1146,58 @@ app.get('/api/admin/visitors', async (c) => {
         return c.json({ success: true, data: emptyVisitorReport(parsePeriod(period)) })
       }
         return c.json({ success: true, data: { today: { date: '', visitors: 0, pageviews: 0, newVisitors: 0 }, days: [] } })
+    }
+    throw error
+  }
+})
+
+app.get('/api/admin/search', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  const period = c.req.query('period')
+  const from = c.req.query('from')
+  const to = c.req.query('to')
+  const q = c.req.query('q')
+  const kind = c.req.query('kind')
+  try {
+    return c.json({ success: true, data: await getSearchReport({ period, from, to, q, kind }) })
+  } catch (error) {
+    if (isMysqlConnectError(error)) {
+      return c.json({ success: true, data: emptySearchReport(parseSearchPeriod(period)) })
+    }
+    throw error
+  }
+})
+
+app.get('/api/admin/search/export', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  const period = c.req.query('period')
+  const from = c.req.query('from')
+  const to = c.req.query('to')
+  const q = c.req.query('q')
+  const kind = c.req.query('kind')
+  try {
+    const [report, history] = await Promise.all([
+      getSearchReport({ period, from, to, q, kind }),
+      listSearchExport({ period, from, to, q, kind }),
+    ])
+    const xml = searchReportToExcelXml({ ...report, history })
+    const stamp = new Date().toISOString().slice(0, 10)
+    return c.body(xml, 200, {
+      'Content-Type': 'application/vnd.ms-excel; charset=utf-8',
+      'Content-Disposition': `attachment; filename="accord-search-intent-${stamp}.xls"`,
+      'Cache-Control': 'private, no-store',
+    })
+  } catch (error) {
+    if (isMysqlConnectError(error)) {
+      const xml = searchReportToExcelXml(emptySearchReport(parseSearchPeriod(period)))
+      const stamp = new Date().toISOString().slice(0, 10)
+      return c.body(xml, 200, {
+        'Content-Type': 'application/vnd.ms-excel; charset=utf-8',
+        'Content-Disposition': `attachment; filename="accord-search-intent-${stamp}.xls"`,
+        'Cache-Control': 'private, no-store',
+      })
     }
     throw error
   }
