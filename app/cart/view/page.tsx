@@ -33,7 +33,7 @@ export default async function CartViewPage() {
         <h1 className="page-title">Request a <em>quote.</em></h1>
         <p className="hero-lede">Add products from the catalogue, then send one request for everything you need.</p>
         <div className="catalog-body">
-          <QuoteCartPanel />
+          <QuoteCartPanel products={catalog.products} />
         </div>
       </section>
       <QuoteInterestCarousel products={catalog.products} showPrices={showPrices} catalogues={catalogues} />

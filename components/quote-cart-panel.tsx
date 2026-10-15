@@ -2,7 +2,8 @@
 
 import Link from 'next/link'
 import { Minus, Plus, Trash2 } from 'lucide-react'
-import { formatKes, productHref } from '@/lib/catalog'
+import { canCheckout, formatKes, productHref, type CatalogProduct } from '@/lib/catalog'
+import { ROUTES } from '@/lib/routes'
 import { COMPANY } from '@/lib/utils'
 import { useQuoteCart } from '@/components/quote-cart'
 import { trackOfferEvent } from '@/lib/offer-track'
@@ -16,8 +17,17 @@ function WhatsAppIcon() {
   )
 }
 
-export function QuoteCartPanel() {
+export function QuoteCartPanel({ products = [] }: { products?: CatalogProduct[] }) {
   const { items, setQuantity, remove } = useQuoteCart()
+  const byId = new Map(products.map((product) => [product.id, product]))
+  const buyable = items.filter((item) => {
+    const product = byId.get(item.id)
+    return product ? canCheckout(product) : false
+  })
+  const checkoutTotal = buyable.reduce((sum, item) => {
+    const product = byId.get(item.id)
+    return sum + (product ? Math.round(product.price) * item.quantity : 0)
+  }, 0)
 
   const whatsappHref = () => {
     const origin = typeof window !== 'undefined' ? window.location.origin : COMPANY.url
@@ -72,6 +82,11 @@ export function QuoteCartPanel() {
         ))}
       </div>
       <div className="quote-side">
+        {buyable.length > 0 && (
+          <Link href={ROUTES.checkout} className="button button-primary">
+            Pay {formatKes(checkoutTotal)} with M-Pesa
+          </Link>
+        )}
         <a
           className="wa-button"
           href={whatsappHref()}

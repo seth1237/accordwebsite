@@ -15,6 +15,8 @@ const LIVE_PREFIXES = [
   '/vacancy',
   '/quote',
   '/cart',
+  '/checkout',
+  '/account',
   '/customer-request',
   '/about-us',
   '/about.html',

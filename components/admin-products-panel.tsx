@@ -2,7 +2,7 @@
 
 import { Fragment, useMemo, useState, type DragEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { Eye, EyeOff, Trash2 } from 'lucide-react'
+import { CreditCard, Eye, EyeOff, Trash2 } from 'lucide-react'
 import type { CatalogCategory, CatalogProduct } from '@/lib/catalog'
 import { formatKes, productImageSrc, slugifyName } from '@/lib/catalog'
 import type { Catalogue } from '@/lib/content'
@@ -33,7 +33,7 @@ export function AdminProductsPanel({
   const router = useRouter()
   const [query, setQuery] = useState('')
   const [categoryId, setCategoryId] = useState('all')
-  const [visibility, setVisibility] = useState<'all' | 'live' | 'hidden'>('all')
+  const [visibility, setVisibility] = useState<'all' | 'live' | 'hidden' | 'checkout'>('all')
   const [page, setPage] = useState(1)
   const [openId, setOpenId] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -45,6 +45,7 @@ export function AdminProductsPanel({
   const [uploadKind, setUploadKind] = useState<Record<string, 'photo' | 'installation'>>({})
 
   const hiddenCount = products.filter((product) => product.hidden).length
+  const checkoutCount = products.filter((product) => product.checkout && product.price > 0).length
 
   const categoryOptions = useMemo(() => {
     if (categories.length) return [...categories].sort((a, b) => a.name.localeCompare(b.name))
@@ -61,7 +62,12 @@ export function AdminProductsPanel({
     const q = query.trim().toLowerCase()
     return products
       .filter((product) => (categoryId === 'all' ? true : product.categoryId === categoryId))
-      .filter((product) => (visibility === 'all' ? true : visibility === 'hidden' ? Boolean(product.hidden) : !product.hidden))
+      .filter((product) => {
+        if (visibility === 'hidden') return Boolean(product.hidden)
+        if (visibility === 'checkout') return Boolean(product.checkout) && product.price > 0
+        if (visibility === 'live') return !product.hidden
+        return true
+      })
       .filter((product) => (q ? `${product.name} ${product.categoryName}`.toLowerCase().includes(q) : true))
       .sort((a, b) => a.categoryName.localeCompare(b.categoryName) || a.name.localeCompare(b.name))
   }, [products, query, categoryId, visibility])
@@ -172,6 +178,28 @@ export function AdminProductsPanel({
     router.refresh()
   }
 
+  async function setCheckout(product: CatalogProduct, checkout: boolean) {
+    if (checkout && !(product.price > 0)) {
+      setMessage('Set a price before enabling checkout.')
+      return
+    }
+    setBusyId(product.id)
+    setMessage('')
+    const response = await fetch(`/api/admin/products/${encodeURIComponent(product.id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ checkout }),
+    })
+    const payload = await response.json().catch(() => ({}))
+    setBusyId(null)
+    if (!response.ok) {
+      setMessage(payload.message || 'Could not update checkout')
+      return
+    }
+    setMessage(checkout ? 'This product can be bought on the website.' : 'Checkout removed. Visitors can still request a quote.')
+    router.refresh()
+  }
+
   async function setHidden(product: CatalogProduct, hidden: boolean) {
     setBusyId(product.id)
     setMessage('')
@@ -263,7 +291,7 @@ export function AdminProductsPanel({
             className="filter-input category-select"
             value={visibility}
             onChange={(event) => {
-              setVisibility(event.target.value as 'all' | 'live' | 'hidden')
+              setVisibility(event.target.value as 'all' | 'live' | 'hidden' | 'checkout')
               setPage(1)
             }}
             aria-label="Filter by visibility"
@@ -271,6 +299,7 @@ export function AdminProductsPanel({
             <option value="all">All products</option>
             <option value="live">On the website</option>
             <option value="hidden">Hidden ({hiddenCount})</option>
+            <option value="checkout">Checkout ({checkoutCount})</option>
           </select>
           <select
             className="filter-input category-select"
@@ -352,6 +381,7 @@ export function AdminProductsPanel({
                     <b>
                       {product.name}
                       {product.hidden ? <em className="admin-status-badge">Hidden</em> : null}
+                      {product.checkout && product.price > 0 ? <em className="admin-status-badge is-checkout">Checkout</em> : null}
                     </b>
                     <small>{product.categoryName} · {formatKes(product.price)} · {product.imageAssets.length} photos{catalogueFor(product.id) ? ' · PDF catalogue' : ''}</small>
                   </div>
@@ -519,6 +549,16 @@ export function AdminProductsPanel({
                       </label>
                     </div>
                     <div className="admin-job-actions">
+                      <button
+                        type="button"
+                        className="button button-outline button-compact"
+                        disabled={busyId === product.id || !(product.price > 0)}
+                        title={product.price > 0 ? undefined : 'Set a price before enabling checkout'}
+                        onClick={() => void setCheckout(product, !product.checkout)}
+                      >
+                        <CreditCard size={14} />
+                        {product.checkout ? 'Remove checkout' : 'Enable checkout'}
+                      </button>
                       <button
                         type="button"
                         className="button button-outline button-compact"

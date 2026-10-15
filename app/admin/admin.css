@@ -64,6 +64,23 @@
   text-transform: uppercase;
   vertical-align: middle;
 }
+.admin-status-badge.is-checkout { background: #087f85; }
+.checkout-pick-list { display: grid; gap: 8px; max-height: 480px; overflow: auto; }
+.checkout-pick {
+  display: grid;
+  grid-template-columns: auto 48px 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid #e4eeec;
+  background: #fff;
+  cursor: pointer;
+}
+.checkout-pick.is-on { border-color: #087f85; background: #f3fbfb; }
+.checkout-pick img { width: 48px; height: 48px; object-fit: cover; background: #eef3f2; }
+.checkout-pick b, .checkout-pick small { display: block; }
+.checkout-pick small { color: #60767d; font-size: 12px; }
+.order-meta, .order-receipt { display: block; color: #60767d; font-size: 11px; font-weight: 400; }
 .button-danger {
   display: inline-flex;
   align-items: center;

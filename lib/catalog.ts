@@ -49,6 +49,7 @@ export type CatalogProduct = {
   productType?: string | null
   featured: boolean
   hidden?: boolean
+  checkout?: boolean
   createdOn?: string
   onOffer?: boolean
   offerId?: string
@@ -316,6 +317,10 @@ export function formatKes(amount: number) {
 export function displayPrice(product: Pick<CatalogProduct, 'price'>, showPrices = true) {
   if (!showPrices || !product.price) return 'Request a quote'
   return formatKes(product.price)
+}
+
+export function canCheckout(product: Pick<CatalogProduct, 'price' | 'checkout' | 'hidden'>) {
+  return Boolean(product.checkout) && Number(product.price) > 0 && !product.hidden
 }
 
 export function slugifyName(name: string) {

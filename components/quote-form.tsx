@@ -8,7 +8,7 @@ import { COMPANY } from '@/lib/utils'
 import { ProductShare } from '@/components/product-share'
 import { ViewCatalogueButton } from '@/components/view-catalogue-button'
 import { useQuoteCart } from '@/components/quote-cart'
-import { productHref, type CatalogProduct } from '@/lib/catalog'
+import { canCheckout, productHref, type CatalogProduct } from '@/lib/catalog'
 import { offerWhatsAppText } from '@/lib/offers'
 import { trackOfferEvent } from '@/lib/offer-track'
 
@@ -43,6 +43,7 @@ export function QuoteForm({
   const [quantity, setQuantity] = useState(1)
   const { add, has } = useQuoteCart()
   const inCart = has(product.id)
+  const buyable = canCheckout(product)
 
   function changeQty(next: number) {
     setQuantity(Math.max(1, Math.min(1000, next)))
@@ -51,6 +52,11 @@ export function QuoteForm({
   function requestQuote() {
     add(product, quantity)
     router.push(ROUTES.quote)
+  }
+
+  function buyNow() {
+    add(product, quantity)
+    router.push(ROUTES.checkout)
   }
 
   return (
@@ -68,15 +74,27 @@ export function QuoteForm({
         </div>
       </div>
       <div className="product-cta-row">
-        <button type="button" className="button button-primary product-quote-btn" onClick={requestQuote}>
-          Request Quote
-        </button>
+        {buyable ? (
+          <button type="button" className="button button-primary product-quote-btn" onClick={buyNow}>
+            Buy now
+          </button>
+        ) : (
+          <button type="button" className="button button-primary product-quote-btn" onClick={requestQuote}>
+            Request Quote
+          </button>
+        )}
         <ViewCatalogueButton product={product} href={catalogueHref} />
       </div>
       <div className="product-secondary-actions">
-        <button type="button" className="text-link" onClick={() => add(product, quantity)}>
-          {inCart ? 'Added to quote cart' : 'Add to quote cart'}
-        </button>
+        {buyable ? (
+          <button type="button" className="text-link" onClick={requestQuote}>
+            Request a quote instead
+          </button>
+        ) : (
+          <button type="button" className="text-link" onClick={() => add(product, quantity)}>
+            {inCart ? 'Added to quote cart' : 'Add to quote cart'}
+          </button>
+        )}
         <a
           className="wa-button"
           href={whatsappHref(product)}

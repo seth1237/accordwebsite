@@ -271,3 +271,23 @@ export async function getSearchReport(query?: {
 export async function siteJobCount() {
   return (await getSiteBootstrap()).jobCount
 }
+
+export async function listCheckoutOrders() {
+  const payload = await backendJson<{ data: Awaited<ReturnType<typeof import('@/lib/checkout-data').listCheckoutOrders>> }>('/api/admin/orders')
+  return payload?.data || []
+}
+
+export async function getCustomerAccount() {
+  const payload = await backendJson<{ data: import('@/lib/customers').CustomerAccount }>('/api/account/me')
+  return payload?.data || null
+}
+
+export async function getAccountDashboard() {
+  const payload = await backendJson<{
+    data: {
+      account: import('@/lib/customers').CustomerAccount
+      orders: Awaited<ReturnType<typeof import('@/lib/account-data').listAccountOrders>>
+    }
+  }>('/api/account/orders')
+  return payload?.data || null
+}

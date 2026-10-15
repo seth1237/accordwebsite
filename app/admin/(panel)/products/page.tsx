@@ -19,7 +19,7 @@ export default async function AdminProductsPage() {
         categories={catalog.categories}
         catalogues={catalogues}
         title="Products"
-        subtitle="Drop photos onto a product, or open it to edit details, hide it from the website, or delete it."
+        subtitle="Drop photos onto a product, or open it to edit details, enable checkout for priced products, hide it, or delete it."
       />
     </>
   )

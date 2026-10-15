@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowRight } from 'lucide-react'
 import { ROUTES } from '@/lib/routes'
-import { PLACEHOLDER_IMAGE, displayPrice, productHref, productImageSrc, type CatalogProduct } from '@/lib/catalog'
+import { PLACEHOLDER_IMAGE, canCheckout, displayPrice, productHref, productImageSrc, type CatalogProduct } from '@/lib/catalog'
 import { productImageAlt } from '@/lib/seo'
 import type { Catalogue } from '@/lib/content'
 import { useQuoteCart } from '@/components/quote-cart'
@@ -22,9 +22,16 @@ export function ProductCard({
   const { add, has } = useQuoteCart()
   const inCart = has(product.id)
 
+  const buyable = canCheckout(product)
+
   function requestQuote() {
     add(product)
     router.push(ROUTES.quote)
+  }
+
+  function buyNow() {
+    add(product)
+    router.push(ROUTES.checkout)
   }
 
   return (
@@ -48,8 +55,8 @@ export function ProductCard({
         </div>
       </Link>
       <div className="product-card-actions home-split">
-        <button type="button" className={inCart ? 'add-quote-btn in-cart' : 'add-quote-btn'} onClick={requestQuote}>
-          Request Quote
+        <button type="button" className={inCart ? 'add-quote-btn in-cart' : 'add-quote-btn'} onClick={buyable ? buyNow : requestQuote}>
+          {buyable ? 'Buy now' : 'Request Quote'}
         </button>
         <Link href={productHref(product)} className="view-product-btn">
           View <ArrowRight size={14} />

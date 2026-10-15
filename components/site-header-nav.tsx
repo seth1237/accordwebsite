@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type FocusEvent, type PointerEvent, type ReactNode } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ArrowRight, ChevronDown, Menu, ShoppingCart, X } from 'lucide-react'
+import { ArrowRight, ChevronDown, CircleUser, Menu, ShoppingCart, X } from 'lucide-react'
 import { Logo } from '@/components/logo'
 import { SearchBox } from '@/components/search-box'
 import { SocialLinks } from '@/components/social-links'
@@ -46,11 +46,13 @@ export function SiteHeaderNav({
   products,
   jobCount = 0,
   offerHeader,
+  accountName = '',
 }: {
   categories: NavCategory[]
   products: SearchProduct[]
   jobCount?: number
   offerHeader?: ReactNode
+  accountName?: string
 }) {
   const [open, setOpen] = useState(false)
   const [mobileCategory, setMobileCategory] = useState<string | null>(null)
@@ -267,6 +269,14 @@ export function SiteHeaderNav({
               <SearchBox products={products} />
             </div>
             <Link href={ROUTES.quote} className="header-quote-link text-link">Request Quote</Link>
+            <Link
+              href={accountName ? ROUTES.account : ROUTES.accountLogin}
+              className="header-account-link"
+              aria-label={accountName ? `Account for ${accountName}` : 'Account'}
+            >
+              <CircleUser size={18} />
+              <span>{accountName ? accountName.split(' ')[0] : 'Account'}</span>
+            </Link>
             <Link href={ROUTES.cart} className="cart-link" aria-label={`Quote cart, ${count} items`}>
               <ShoppingCart size={18} />
               {count > 0 && <span className="cart-count">{count}</span>}
@@ -298,6 +308,14 @@ export function SiteHeaderNav({
               ))}
             </nav>
             <div className="mobile-menu-actions">
+              <Link
+                href={accountName ? ROUTES.account : ROUTES.accountLogin}
+                className="button button-outline mobile-account-btn"
+                onClick={closeMenu}
+              >
+                <CircleUser size={18} />
+                {accountName ? `${accountName.split(' ')[0]}’s account` : 'Account'}
+              </Link>
               <Link href={ROUTES.quote} className="button button-primary" onClick={closeMenu}>Request Quote</Link>
               <Link href={ROUTES.cart} className="button button-outline mobile-cart-btn" onClick={closeMenu}>
                 Quote cart{count > 0 ? ` (${count})` : ''}

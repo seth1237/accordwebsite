@@ -3,7 +3,7 @@ import { cors } from 'hono/cors'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { bodyLimit } from 'hono/body-limit'
 import { z } from 'zod'
-import { ADMIN_COOKIE, adminCookieOptions, authenticateAdmin, createAdminSessionValue, parseAdminSessionValue } from '../../lib/auth-core'
+import { ADMIN_COOKIE, CUSTOMER_COOKIE, adminCookieOptions, authenticateAdmin, createAdminSessionValue, createCustomerSessionValue, customerCookieOptions, parseAdminSessionValue, parseCustomerSessionValue } from '../../lib/auth-core'
 import { slugifyName } from '../../lib/catalog'
 import { createCatalogCategory, createCatalogProduct, deleteCatalogProduct, getCatalog, getCatalogProduct, getPriceVisibility, importProductsFromCsv, updateCatalogProduct } from '../../lib/catalog-data'
 import { csvIds } from '../../lib/content'
@@ -108,6 +108,14 @@ import {
   updateJobApplicationStatus,
 } from '../../lib/job-applications'
 import { formChecked, formText, uploadFormCv, uploadFormDocument, uploadFormImage } from './forms'
+import {
+  applyMpesaCallback,
+  listCheckoutOrders,
+  refreshCheckoutOrder,
+  replaceProductCheckout,
+  startCheckout,
+} from '../../lib/checkout-data'
+import { getCustomerAccount, listAccountOrders, loginCustomer, registerCustomer } from '../../lib/account-data'
 
 const CORS_ORIGINS = new Set([
   'https://accordmedical.co.ke',
@@ -161,6 +169,22 @@ function requireAdmin(c: Parameters<typeof sessionFrom>[0]) {
   if (!session) return { error: { success: false, message: 'Sign in required' }, status: 401 as const }
   if (!isStoreConfigured()) return { error: { success: false, message: 'Database is not configured' }, status: 503 as const }
   return { session }
+}
+
+function customerSessionFrom(c: { req: { header: (name: string) => string | undefined } }) {
+  const header = c.req.header('cookie') || ''
+  const match = header.match(new RegExp(`(?:^|;\\s*)${CUSTOMER_COOKIE}=([^;]+)`))
+  return parseCustomerSessionValue(match?.[1] || getCookie(c as never, CUSTOMER_COOKIE))
+}
+
+function requireCustomer(c: Parameters<typeof customerSessionFrom>[0]) {
+  const session = customerSessionFrom(c)
+  if (!session) return { error: { success: false, message: 'Sign in required' }, status: 401 as const }
+  return { session }
+}
+
+function writeCustomerSession(c: Parameters<typeof setCookie>[0], customer: { id: string; phone: string; name: string }) {
+  setCookie(c, CUSTOMER_COOKIE, createCustomerSessionValue(customer), customerCookieOptions())
 }
 
 function textValue(value: unknown, max = 200) {
@@ -533,6 +557,100 @@ app.post('/api/analytics/search', async (c) => {
   }
 })
 
+app.post('/api/checkout', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}))
+    const items = Array.isArray(body.items) ? body.items : []
+    const session = customerSessionFrom(c)
+    const data = await startCheckout({
+      name: textValue(body.name, 120),
+      phone: textValue(body.phone, 32),
+      email: textValue(body.email, 191),
+      location: textValue(body.location, 191),
+      items,
+      customerId: session?.id,
+    })
+    return c.json({ success: true, data })
+  } catch (error) {
+    return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not start checkout' }, 400)
+  }
+})
+
+app.get('/api/checkout/:id', async (c) => {
+  try {
+    const data = await refreshCheckoutOrder(c.req.param('id'))
+    if (!data) return c.json({ success: false, message: 'Order not found' }, 404)
+    return c.json({ success: true, data })
+  } catch (error) {
+    return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not check payment' }, 400)
+  }
+})
+
+app.post('/api/checkout/mpesa/callback', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  await applyMpesaCallback(body).catch(() => null)
+  return c.json({ ResultCode: 0, ResultDesc: 'Accepted' })
+})
+
+app.post('/api/account/register', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}))
+    const customer = await registerCustomer({
+      name: textValue(body.name, 120),
+      facilityName: textValue(body.facilityName || body.facility, 120),
+      phone: textValue(body.phone, 32),
+      location: textValue(body.location, 120),
+    })
+    writeCustomerSession(c, customer)
+    return c.json({ success: true, data: customer })
+  } catch (error) {
+    return c.json({ success: false, message: databaseErrorMessage(error) }, 400)
+  }
+})
+
+app.post('/api/account/login', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}))
+    const customer = await loginCustomer(body.phone)
+    writeCustomerSession(c, customer)
+    return c.json({ success: true, data: customer })
+  } catch (error) {
+    return c.json({ success: false, message: databaseErrorMessage(error) }, 400)
+  }
+})
+
+app.post('/api/account/logout', (c) => {
+  deleteCookie(c, CUSTOMER_COOKIE, { path: '/' })
+  return c.json({ success: true })
+})
+
+app.get('/api/account/me', async (c) => {
+  const auth = requireCustomer(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  try {
+    const customer = await getCustomerAccount(auth.session.id)
+    if (!customer) return c.json({ success: false, message: 'Account not found' }, 404)
+    writeCustomerSession(c, customer)
+    return c.json({ success: true, data: customer })
+  } catch (error) {
+    return c.json({ success: false, message: databaseErrorMessage(error) }, 400)
+  }
+})
+
+app.get('/api/account/orders', async (c) => {
+  const auth = requireCustomer(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  try {
+    const customer = await getCustomerAccount(auth.session.id)
+    if (!customer) return c.json({ success: false, message: 'Account not found' }, 404)
+    writeCustomerSession(c, customer)
+    const orders = await listAccountOrders({ customerId: customer.id, phone: customer.phone })
+    return c.json({ success: true, data: { account: customer, orders } })
+  } catch (error) {
+    return c.json({ success: false, message: databaseErrorMessage(error) }, 400)
+  }
+})
+
 app.post('/api/contact', async (c) => {
   if (!isStoreConfigured()) return c.json({ success: false, message: 'Contact inbox is not configured' }, 503)
   try {
@@ -783,8 +901,8 @@ app.patch('/api/admin/products/:id', async (c) => {
   if (auth.error) return c.json(auth.error, auth.status)
   if (!isMysqlConfigured()) return c.json({ success: false, message: 'MySQL is not configured' }, 503)
   const id = c.req.param('id')
-  const body = await c.req.json().catch(() => ({})) as { name?: string; details?: string; distributedFor?: string; hidden?: boolean }
-  if (!String(body.name || '').trim() && body.details === undefined && body.distributedFor === undefined && typeof body.hidden !== 'boolean') {
+  const body = await c.req.json().catch(() => ({})) as { name?: string; details?: string; distributedFor?: string; hidden?: boolean; checkout?: boolean }
+  if (!String(body.name || '').trim() && body.details === undefined && body.distributedFor === undefined && typeof body.hidden !== 'boolean' && typeof body.checkout !== 'boolean') {
     return c.json({ success: false, message: 'Nothing to update' }, 400)
   }
   try {
@@ -793,6 +911,7 @@ app.patch('/api/admin/products/:id', async (c) => {
       details: body.details,
       distributedFor: body.distributedFor,
       hidden: typeof body.hidden === 'boolean' ? body.hidden : undefined,
+      checkout: typeof body.checkout === 'boolean' ? body.checkout : undefined,
     })
     invalidatePublicCatalog()
     return c.json({ success: true, data })
@@ -1200,6 +1319,32 @@ app.get('/api/admin/search/export', async (c) => {
       })
     }
     throw error
+  }
+})
+
+app.get('/api/admin/orders', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  try {
+    return c.json({ success: true, data: await listCheckoutOrders() })
+  } catch (error) {
+    if (isMysqlConnectError(error)) return c.json({ success: true, data: [] })
+    throw error
+  }
+})
+
+app.put('/api/admin/checkout/products', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  if (!isMysqlConfigured()) return c.json({ success: false, message: 'MySQL is not configured' }, 503)
+  const body = await c.req.json().catch(() => ({})) as { productIds?: unknown }
+  const productIds = Array.isArray(body.productIds) ? body.productIds.map((id) => String(id || '')) : []
+  try {
+    await replaceProductCheckout(productIds)
+    invalidatePublicCatalog()
+    return c.json({ success: true })
+  } catch (error) {
+    return c.json({ success: false, message: databaseErrorMessage(error) }, 400)
   }
 })
 

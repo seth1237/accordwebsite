@@ -5,7 +5,9 @@ import { isMysqlConfigured } from '@/lib/mysql'
 
 const scryptAsync = promisify(scrypt)
 export const ADMIN_COOKIE = 'tarumed_admin'
+export const CUSTOMER_COOKIE = 'accord_customer'
 const SESSION_DAYS = 7
+const CUSTOMER_SESSION_DAYS = 180
 
 function sessionSecret() {
   return process.env.ADMIN_SESSION_SECRET || process.env.ADMIN_PASSWORD || 'tarumed-dev-secret'
@@ -106,6 +108,39 @@ export function parseAdminSessionValue(token: string | undefined | null): { emai
     const data = JSON.parse(Buffer.from(payload, 'base64url').toString()) as { email?: string; exp?: number }
     if (!data.email || !data.exp || data.exp < Date.now()) return null
     return { email: data.email }
+  } catch {
+    return null
+  }
+}
+
+export function customerCookieOptions() {
+  return {
+    httpOnly: true,
+    sameSite: 'lax' as const,
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: CUSTOMER_SESSION_DAYS * 24 * 60 * 60,
+  }
+}
+
+export function createCustomerSessionValue(input: { id: string; phone: string; name: string }) {
+  const payload = Buffer.from(JSON.stringify({
+    id: String(input.id),
+    phone: String(input.phone),
+    name: String(input.name || '').slice(0, 80),
+    exp: Date.now() + CUSTOMER_SESSION_DAYS * 24 * 60 * 60 * 1000,
+  })).toString('base64url')
+  return signValue(payload)
+}
+
+export function parseCustomerSessionValue(token: string | undefined | null): { id: string; phone: string; name: string } | null {
+  if (!token) return null
+  const payload = verifySignedValue(token)
+  if (!payload) return null
+  try {
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString()) as { id?: string; phone?: string; name?: string; exp?: number }
+    if (!data.id || !data.phone || !data.exp || data.exp < Date.now()) return null
+    return { id: String(data.id), phone: String(data.phone), name: String(data.name || '') }
   } catch {
     return null
   }

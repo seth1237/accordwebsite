@@ -235,7 +235,7 @@ export async function createCatalogProduct(input: {
 
 export async function updateCatalogProduct(
   id: string,
-  updates: { name?: string; details?: string; distributedFor?: string; description?: string; hidden?: boolean },
+  updates: { name?: string; details?: string; distributedFor?: string; description?: string; hidden?: boolean; checkout?: boolean },
 ) {
   if (!isMysqlConfigured()) throw new Error('MySQL is not configured')
   const product = await mysqlUpdateCatalogProduct(id, {
@@ -243,6 +243,7 @@ export async function updateCatalogProduct(
     details: updates.details,
     description: updates.description,
     hidden: updates.hidden,
+    checkout: updates.checkout,
   })
   if (!product) throw new Error('Product not found')
   if (updates.details !== undefined || updates.distributedFor !== undefined) {

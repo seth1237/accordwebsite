@@ -2,7 +2,9 @@ import { setDefaultResultOrder } from 'node:dns'
 import mysql, { type Pool, type ResultSetHeader, type RowDataPacket } from 'mysql2/promise'
 import type { Catalogue, CatalogueDownload, CompanyProfilePage, MediaAsset, OfferEvent } from '@/lib/content'
 import type { CatalogCategory, CatalogProduct } from '@/lib/catalog'
+import { parseCheckoutStatus, type CheckoutItem, type CheckoutOrder, type CheckoutStatus } from '@/lib/checkout'
 import { publicCategorySlug, slugifyName } from '@/lib/catalog'
+import type { CustomerAccount } from '@/lib/customers'
 import type { JobApplication } from '@/lib/jobs'
 import { clampRange, defaultRange, fillVisitorSeries, isIsoDate, monthStart, parsePeriod, weekStart } from '@/lib/visitor-report'
 import {
@@ -47,7 +49,7 @@ type SiteSettings = {
   updatedAt: Date
 }
 
-const MYSQL_SCHEMA_VERSION = 12
+const MYSQL_SCHEMA_VERSION = 14
 
 type MysqlState = {
   pool: Pool | null
@@ -371,6 +373,7 @@ async function applyMysqlSchema() {
   await mysqlAddColumnIfMissing('accord_nx_site_settings', 'use_local_catalog', `use_local_catalog TINYINT(1) NOT NULL DEFAULT 0`)
   await mysqlAddColumnIfMissing('accord_nx_products', 'seo', `seo LONGTEXT NULL`)
   await mysqlAddColumnIfMissing('accord_nx_products', 'hidden', `hidden TINYINT(1) NOT NULL DEFAULT 0`)
+  await mysqlAddColumnIfMissing('accord_nx_products', 'checkout', `checkout TINYINT(1) NOT NULL DEFAULT 0`)
   await mysqlAddColumnIfMissing('accord_nx_product_performance', 'carts', `carts INT NOT NULL DEFAULT 0`)
   await mysqlAddColumnIfMissing('accord_nx_product_performance', 'last_carted_at', `last_carted_at DATETIME NULL`)
   await pool.query(`
@@ -472,6 +475,44 @@ async function applyMysqlSchema() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
   `)
   await mysqlAddColumnIfMissing('accord_nx_search_events', 'search_date', `search_date DATE NULL`)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS accord_nx_orders (
+      id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+      reference VARCHAR(32) NOT NULL,
+      status VARCHAR(32) NOT NULL DEFAULT 'pending',
+      customer_name VARCHAR(191) NOT NULL,
+      phone VARCHAR(32) NOT NULL,
+      email VARCHAR(191) NOT NULL DEFAULT '',
+      location VARCHAR(191) NOT NULL DEFAULT '',
+      amount INT NOT NULL DEFAULT 0,
+      items_json MEDIUMTEXT NOT NULL,
+      mpesa_merchant_id VARCHAR(64) NOT NULL DEFAULT '',
+      mpesa_checkout_id VARCHAR(64) NOT NULL DEFAULT '',
+      mpesa_receipt VARCHAR(64) NOT NULL DEFAULT '',
+      mpesa_result VARCHAR(255) NOT NULL DEFAULT '',
+      created_at DATETIME NOT NULL,
+      updated_at DATETIME NOT NULL,
+      PRIMARY KEY (id),
+      UNIQUE KEY reference (reference),
+      KEY status_created (status, created_at),
+      KEY mpesa_checkout_id (mpesa_checkout_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+  `)
+  await mysqlAddColumnIfMissing('accord_nx_orders', 'customer_id', `customer_id INT UNSIGNED NULL`)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS accord_nx_customers (
+      id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+      name VARCHAR(191) NOT NULL,
+      facility_name VARCHAR(191) NOT NULL,
+      phone VARCHAR(32) NOT NULL,
+      location VARCHAR(191) NOT NULL DEFAULT '',
+      created_at DATETIME NOT NULL,
+      updated_at DATETIME NOT NULL,
+      last_seen_at DATETIME NOT NULL,
+      PRIMARY KEY (id),
+      UNIQUE KEY phone (phone)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+  `)
 }
 
 export async function ensureMysqlSchema() {
@@ -1311,12 +1352,13 @@ type CatalogProductRow = RowDataPacket & {
   featured: number
   in_stock: number
   hidden?: number
+  checkout?: number
   created_on: string
   seo?: string | null
 }
 
 const CATALOG_PRODUCT_COLUMNS = `id, slug, name, product_type, description, details, price, compare_at, manufacturer,
-              category_id, category_name, featured, in_stock, hidden, created_on, seo`
+              category_id, category_name, featured, in_stock, hidden, checkout, created_on, seo`
 
 function mapCatalogProductRow(row: CatalogProductRow): CatalogProduct {
   const price = Number(row.price) || 0
@@ -1345,6 +1387,7 @@ function mapCatalogProductRow(row: CatalogProductRow): CatalogProduct {
     productType: row.product_type || null,
     featured: Boolean(row.featured),
     hidden: Boolean(row.hidden),
+    checkout: Boolean(row.checkout),
     createdOn: row.created_on || undefined,
     seo: row.seo ? parseSeoJson(row.seo) : undefined,
   }
@@ -1561,6 +1604,7 @@ export async function mysqlUpdateCatalogProduct(
     categoryName?: string
     price?: number
     hidden?: boolean
+    checkout?: boolean
   },
 ) {
   const existing = await mysqlGetCatalogProduct(id)
@@ -1573,15 +1617,36 @@ export async function mysqlUpdateCatalogProduct(
   const categoryName = updates.categoryName || existing.categoryName
   const price = updates.price !== undefined ? Number(updates.price) || 0 : existing.price
   const hidden = updates.hidden !== undefined ? Boolean(updates.hidden) : Boolean(existing.hidden)
+  const checkout = updates.checkout !== undefined ? Boolean(updates.checkout) : Boolean(existing.checkout)
+  if (checkout && price <= 0) throw new Error('Set a price before enabling checkout')
   await ensureMysqlSchema()
   const pool = await getPool()
   await pool.query(
     `UPDATE accord_nx_products
-     SET name = ?, description = ?, details = ?, price = ?, category_id = ?, category_name = ?, hidden = ?, updated_at = ?
+     SET name = ?, description = ?, details = ?, price = ?, category_id = ?, category_name = ?, hidden = ?, checkout = ?, updated_at = ?
      WHERE id = ?`,
-    [name, description, details, price, categoryId, categoryName, hidden ? 1 : 0, new Date(), id],
+    [name, description, details, price, categoryId, categoryName, hidden ? 1 : 0, checkout ? 1 : 0, new Date(), id],
   )
   return mysqlGetCatalogProduct(id)
+}
+
+export async function mysqlSetProductCheckout(id: string, checkout: boolean) {
+  return mysqlUpdateCatalogProduct(id, { checkout: Boolean(checkout) })
+}
+
+export async function mysqlReplaceProductCheckout(productIds: string[]) {
+  const ids = [...new Set(productIds.map((id) => String(id || '').trim()).filter(Boolean))]
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const now = new Date()
+  await pool.query('UPDATE accord_nx_products SET checkout = 0, updated_at = ? WHERE price > 0 AND hidden = 0', [now])
+  if (!ids.length) return mysqlListCatalogProducts()
+  const placeholders = ids.map(() => '?').join(', ')
+  await pool.query(
+    `UPDATE accord_nx_products SET checkout = 1, updated_at = ? WHERE price > 0 AND id IN (${placeholders})`,
+    [now, ...ids],
+  )
+  return mysqlListCatalogProducts()
 }
 
 export async function mysqlCreateCatalogProduct(input: {
@@ -1624,6 +1689,7 @@ export async function mysqlCreateCatalogProduct(input: {
     shopUrl: `/product/${slug}`,
     featured: Boolean(input.featured),
     hidden: false,
+    checkout: false,
     createdOn: new Date().toISOString(),
     seo: input.seo,
   }
@@ -1677,6 +1743,254 @@ export async function mysqlCatalogImportStats() {
     importedImages: Number(imageRows[0]?.total) || 0,
     storedImages: Number(fileRows[0]?.total) || 0,
   }
+}
+
+function parseCheckoutItems(value: unknown): CheckoutItem[] {
+  try {
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value
+    if (!Array.isArray(parsed)) return []
+    return parsed.map((row) => ({
+      productId: String(row?.productId || ''),
+      name: String(row?.name || ''),
+      quantity: Math.max(1, Number(row?.quantity) || 1),
+      unitPrice: Math.max(0, Number(row?.unitPrice) || 0),
+    })).filter((row) => row.productId && row.name)
+  } catch {
+    return []
+  }
+}
+
+function checkoutReference() {
+  const stamp = Date.now().toString(36).toUpperCase().slice(-7)
+  const rand = Math.random().toString(36).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4)
+  return `AMS${stamp}${rand}`.slice(0, 12)
+}
+
+function mapCheckoutOrder(row: RowDataPacket): CheckoutOrder {
+  return {
+    id: String(row.id),
+    reference: String(row.reference || ''),
+    status: parseCheckoutStatus(row.status),
+    customerName: String(row.customer_name || ''),
+    phone: String(row.phone || ''),
+    email: String(row.email || ''),
+    location: String(row.location || ''),
+    amount: Number(row.amount) || 0,
+    items: parseCheckoutItems(row.items_json),
+    mpesaReceipt: String(row.mpesa_receipt || ''),
+    mpesaResult: String(row.mpesa_result || ''),
+    mpesaCheckoutId: String(row.mpesa_checkout_id || ''),
+    createdAt: iso(row.created_at),
+    updatedAt: iso(row.updated_at),
+  }
+}
+
+export async function mysqlCreateCheckoutOrder(input: {
+  customerName: string
+  phone: string
+  email?: string
+  location?: string
+  amount: number
+  items: CheckoutItem[]
+  customerId?: string
+}) {
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const now = new Date()
+  const reference = checkoutReference()
+  const customerId = Number(input.customerId) || null
+  const [result] = await pool.query<ResultSetHeader>(
+    `INSERT INTO accord_nx_orders
+      (reference, status, customer_name, phone, email, location, amount, items_json, customer_id, created_at, updated_at)
+     VALUES (?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      reference,
+      input.customerName,
+      input.phone,
+      String(input.email || '').slice(0, 191),
+      String(input.location || '').slice(0, 191),
+      Math.max(0, Math.round(input.amount)),
+      JSON.stringify(input.items),
+      customerId,
+      now,
+      now,
+    ],
+  )
+  const order = await mysqlGetCheckoutOrder(String(result.insertId))
+  if (!order) throw new Error('Could not create order')
+  return order
+}
+
+export async function mysqlGetCheckoutOrder(id: string) {
+  const orderId = String(id || '').trim()
+  if (!orderId) return null
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const [rows] = await pool.query<RowDataPacket[]>(
+    'SELECT * FROM accord_nx_orders WHERE id = ? OR reference = ? LIMIT 1',
+    [orderId, orderId],
+  )
+  return rows[0] ? mapCheckoutOrder(rows[0]) : null
+}
+
+export async function mysqlGetCheckoutOrderByCheckoutId(checkoutRequestId: string) {
+  const requestId = String(checkoutRequestId || '').trim()
+  if (!requestId) return null
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const [rows] = await pool.query<RowDataPacket[]>(
+    'SELECT * FROM accord_nx_orders WHERE mpesa_checkout_id = ? LIMIT 1',
+    [requestId],
+  )
+  return rows[0] ? mapCheckoutOrder(rows[0]) : null
+}
+
+export async function mysqlUpdateCheckoutOrder(id: string, updates: {
+  status?: CheckoutStatus
+  mpesaCheckoutId?: string
+  mpesaMerchantId?: string
+  mpesaReceipt?: string
+  mpesaResult?: string
+}) {
+  const existing = await mysqlGetCheckoutOrder(id)
+  if (!existing) return null
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  await pool.query(
+    `UPDATE accord_nx_orders
+     SET status = ?, mpesa_checkout_id = ?, mpesa_merchant_id = IF(? <> '', ?, mpesa_merchant_id),
+         mpesa_receipt = IF(? <> '', ?, mpesa_receipt), mpesa_result = ?, updated_at = ?
+     WHERE id = ?`,
+    [
+      updates.status || existing.status,
+      updates.mpesaCheckoutId || existing.mpesaCheckoutId || '',
+      updates.mpesaMerchantId || '',
+      updates.mpesaMerchantId || '',
+      updates.mpesaReceipt || '',
+      updates.mpesaReceipt || '',
+      String(updates.mpesaResult ?? existing.mpesaResult).slice(0, 255),
+      new Date(),
+      existing.id,
+    ],
+  )
+  return mysqlGetCheckoutOrder(existing.id)
+}
+
+export async function mysqlListCheckoutOrders() {
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const [rows] = await pool.query<RowDataPacket[]>(
+    'SELECT * FROM accord_nx_orders ORDER BY created_at DESC LIMIT 200',
+  )
+  return rows.map(mapCheckoutOrder)
+}
+
+export async function mysqlListCustomerOrders(input: { customerId?: string; phone?: string }) {
+  const customerId = Number(input.customerId) || 0
+  const phone = String(input.phone || '').trim()
+  if (!customerId && !phone) return []
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const filters: string[] = []
+  const params: Array<string | number> = []
+  if (customerId) {
+    filters.push('customer_id = ?')
+    params.push(customerId)
+  }
+  if (phone) {
+    filters.push('phone = ?')
+    params.push(phone)
+  }
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT * FROM accord_nx_orders WHERE ${filters.join(' OR ')} ORDER BY created_at DESC LIMIT 100`,
+    params,
+  )
+  return rows.map(mapCheckoutOrder)
+}
+
+function mapCustomer(row: RowDataPacket): CustomerAccount {
+  return {
+    id: String(row.id),
+    name: String(row.name || ''),
+    facilityName: String(row.facility_name || ''),
+    phone: String(row.phone || ''),
+    location: String(row.location || ''),
+    createdAt: iso(row.created_at),
+  }
+}
+
+export async function mysqlGetCustomerById(id: string) {
+  const customerId = Number(id) || 0
+  if (!customerId) return null
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const [rows] = await pool.query<RowDataPacket[]>(
+    'SELECT * FROM accord_nx_customers WHERE id = ? LIMIT 1',
+    [customerId],
+  )
+  return rows[0] ? mapCustomer(rows[0]) : null
+}
+
+export async function mysqlGetCustomerByPhone(phone: string) {
+  const normalized = String(phone || '').trim()
+  if (!normalized) return null
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const [rows] = await pool.query<RowDataPacket[]>(
+    'SELECT * FROM accord_nx_customers WHERE phone = ? LIMIT 1',
+    [normalized],
+  )
+  return rows[0] ? mapCustomer(rows[0]) : null
+}
+
+export async function mysqlCreateCustomer(input: {
+  name: string
+  facilityName: string
+  phone: string
+  location: string
+}) {
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const now = new Date()
+  try {
+    const [result] = await pool.query<ResultSetHeader>(
+      `INSERT INTO accord_nx_customers
+        (name, facility_name, phone, location, created_at, updated_at, last_seen_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [input.name, input.facilityName, input.phone, input.location, now, now, now],
+    )
+    const customer = await mysqlGetCustomerById(String(result.insertId))
+    if (!customer) throw new Error('Could not create account')
+    await mysqlLinkOrdersToCustomer(customer.id, customer.phone)
+    return customer
+  } catch (error) {
+    const code = (error as { code?: string }).code
+    if (code === 'ER_DUP_ENTRY') throw new Error('An account with this phone number already exists. Sign in instead.')
+    throw error
+  }
+}
+
+export async function mysqlTouchCustomer(id: string) {
+  const customerId = Number(id) || 0
+  if (!customerId) return
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  await pool.query(
+    'UPDATE accord_nx_customers SET last_seen_at = ?, updated_at = updated_at WHERE id = ?',
+    [new Date(), customerId],
+  )
+}
+
+export async function mysqlLinkOrdersToCustomer(customerId: string, phone: string) {
+  const id = Number(customerId) || 0
+  const normalized = String(phone || '').trim()
+  if (!id || !normalized) return
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  await pool.query(
+    'UPDATE accord_nx_orders SET customer_id = ? WHERE phone = ? AND (customer_id IS NULL OR customer_id = 0)',
+    [id, normalized],
+  )
 }
 
 export async function mysqlIsLocalCatalogReady() {
