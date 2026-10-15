@@ -1210,6 +1210,18 @@ h1, h2, h3, p { margin: 0; }
 .account-order.is-paid { border-color: rgba(8, 127, 133, .35); }
 .account-order.is-failed,
 .account-order.is-cancelled { border-color: rgba(180, 35, 24, .28); }
+.account-interest { display: grid; gap: 14px; }
+.account-interest h3 { color: var(--navy); font-size: 16px; margin: 0 0 8px; }
+.account-interest-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.account-interest-list { display: grid; gap: 8px; }
+.account-interest-item {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.account-interest-item a { color: var(--navy); font-weight: 700; font-size: 14px; }
+.account-interest-item small { display: block; margin-top: 4px; color: var(--muted-foreground); font-size: 12px; }
 
 .post-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 28px; }
 .post-card { background: var(--glass); border: 1px solid var(--glass-border); border-radius: 16px; padding: 20px; backdrop-filter: blur(10px); box-shadow: 6px 6px 16px var(--neo-dark), -4px -4px 12px var(--neo-light); }
@@ -1645,7 +1657,7 @@ footer { background: #000; color: #dce9e8; padding-top: 36px; view-transition-na
   .shop-main .section { padding-top: 28px; }
   .shop-main .catalog-section { padding: 20px 0 40px; }
   .catalog-intro { align-items: flex-start; flex-direction: column; }
-  .category-list, .dropdown-products, .contact-grid, .product-detail-grid, .quote-layout, .post-grid, .job-grid, .jobs-split { grid-template-columns: 1fr; }
+  .category-list, .dropdown-products, .contact-grid, .product-detail-grid, .quote-layout, .post-grid, .job-grid, .jobs-split, .account-interest-grid { grid-template-columns: 1fr; }
   .jobs-cv-panel { position: static; }
   .footer-split {
     grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);

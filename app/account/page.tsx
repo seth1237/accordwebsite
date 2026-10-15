@@ -32,7 +32,12 @@ export default async function AccountPage() {
         <span className="kicker">Account</span>
         <h1 className="page-title">Your <em>orders.</em></h1>
         <p className="hero-lede">Signed in with your facility phone number. You stay signed in for months unless you sign out.</p>
-        <AccountDashboard account={dashboard.account} orders={dashboard.orders} />
+        <AccountDashboard
+          account={dashboard.account}
+          orders={dashboard.orders}
+          viewed={dashboard.viewed}
+          bought={dashboard.bought}
+        />
       </section>
       <SiteFooter />
     </main>

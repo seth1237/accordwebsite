@@ -287,7 +287,20 @@ export async function getAccountDashboard() {
     data: {
       account: import('@/lib/customers').CustomerAccount
       orders: Awaited<ReturnType<typeof import('@/lib/account-data').listAccountOrders>>
+      viewed?: Awaited<ReturnType<typeof import('@/lib/account-data').listAccountInterest>>
+      bought?: Awaited<ReturnType<typeof import('@/lib/account-data').listAccountPurchases>>
     }
   }>('/api/account/orders')
-  return payload?.data || null
+  if (!payload?.data) return null
+  return {
+    account: payload.data.account,
+    orders: payload.data.orders || [],
+    viewed: payload.data.viewed || [],
+    bought: payload.data.bought || [],
+  }
+}
+
+export async function listClientInterestBoard() {
+  const payload = await backendJson<{ data: Awaited<ReturnType<typeof import('@/lib/account-data').listClientInterestBoard>> }>('/api/admin/interest')
+  return payload?.data || []
 }

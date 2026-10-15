@@ -1,12 +1,16 @@
 import { normalizeKenyaPhone, type CheckoutOrder } from '@/lib/checkout'
-import type { CustomerAccount } from '@/lib/customers'
+import type { CustomerAccount, CustomerInterestProduct, CustomerPurchaseProduct } from '@/lib/customers'
 import {
   isMysqlConfigured,
   mysqlCreateCustomer,
   mysqlGetCustomerById,
   mysqlGetCustomerByPhone,
   mysqlLinkOrdersToCustomer,
+  mysqlListClientInterestBoard,
+  mysqlListCustomerInterest,
   mysqlListCustomerOrders,
+  mysqlListCustomerPurchases,
+  mysqlRecordCustomerInterest,
   mysqlTouchCustomer,
 } from '@/lib/mysql'
 
@@ -54,4 +58,31 @@ export async function getCustomerAccount(id: string) {
 export async function listAccountOrders(input: { customerId: string; phone: string }): Promise<CheckoutOrder[]> {
   if (!isMysqlConfigured()) return []
   return mysqlListCustomerOrders({ customerId: input.customerId, phone: input.phone })
+}
+
+export async function recordCustomerInterest(input: {
+  customerId: string
+  productId: string
+  productName: string
+  categoryId?: string
+  categoryName?: string
+  kind: 'click' | 'cart'
+}) {
+  if (!isMysqlConfigured()) return
+  await mysqlRecordCustomerInterest(input)
+}
+
+export async function listAccountInterest(customerId: string): Promise<CustomerInterestProduct[]> {
+  if (!isMysqlConfigured()) return []
+  return mysqlListCustomerInterest(customerId)
+}
+
+export async function listAccountPurchases(input: { customerId: string; phone: string }): Promise<CustomerPurchaseProduct[]> {
+  if (!isMysqlConfigured()) return []
+  return mysqlListCustomerPurchases(input)
+}
+
+export async function listClientInterestBoard() {
+  if (!isMysqlConfigured()) return []
+  return mysqlListClientInterestBoard()
 }

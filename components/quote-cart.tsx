@@ -62,6 +62,7 @@ export function QuoteCartProvider({ children }: { children: React.ReactNode }) {
         sessionStorage.setItem(key, String(Date.now()))
         void fetch('/api/products/cart', {
           method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             productId: product.id,

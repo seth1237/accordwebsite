@@ -537,7 +537,16 @@
   min-width: 160px;
   border-radius: 0;
 }
+.client-interest-list { display: grid; gap: 14px; }
+.client-interest-card .card-title small { color: #087f85; font-weight: 700; white-space: nowrap; }
+.client-interest-split { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.client-interest-split h4 { margin: 0 0 8px; font-size: 13px; color: #123744; }
+.client-interest-split ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.client-interest-split li { display: grid; gap: 2px; }
+.client-interest-split a { color: #123744; font-size: 13px; font-weight: 700; }
+.client-interest-split small { color: #60767d; font-size: 11px; }
 @media (max-width: 900px) {
   .search-demand-grid { grid-template-columns: 1fr; }
   .search-kpis { grid-template-columns: 1fr 1fr; }
+  .client-interest-split { grid-template-columns: 1fr; }
 }

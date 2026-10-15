@@ -115,7 +115,7 @@ import {
   replaceProductCheckout,
   startCheckout,
 } from '../../lib/checkout-data'
-import { getCustomerAccount, listAccountOrders, loginCustomer, registerCustomer } from '../../lib/account-data'
+import { getCustomerAccount, listAccountOrders, listAccountInterest, listAccountPurchases, listClientInterestBoard, loginCustomer, recordCustomerInterest, registerCustomer } from '../../lib/account-data'
 
 const CORS_ORIGINS = new Set([
   'https://accordmedical.co.ke',
@@ -455,6 +455,17 @@ app.post('/api/products/click', async (c) => {
       categoryName: textValue(body.categoryName, 200),
       fromProductId: textValue(body.fromProductId, 80) || undefined,
     })
+    const session = customerSessionFrom(c)
+    if (session) {
+      await recordCustomerInterest({
+        customerId: session.id,
+        productId: erpProductId,
+        productName: textValue(body.productName, 200),
+        categoryId: textValue(body.categoryId, 80),
+        categoryName: textValue(body.categoryName, 200),
+        kind: 'click',
+      }).catch(() => null)
+    }
     return c.json({ success: true })
   } catch (error) {
     return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not record click' }, 500)
@@ -513,6 +524,17 @@ app.post('/api/products/cart', async (c) => {
       categoryId: textValue(body.categoryId, 80),
       categoryName: textValue(body.categoryName, 200),
     })
+    const session = customerSessionFrom(c)
+    if (session) {
+      await recordCustomerInterest({
+        customerId: session.id,
+        productId: erpProductId,
+        productName: textValue(body.productName, 200),
+        categoryId: textValue(body.categoryId, 80),
+        categoryName: textValue(body.categoryName, 200),
+        kind: 'cart',
+      }).catch(() => null)
+    }
     return c.json({ success: true })
   } catch (error) {
     if (isMysqlConnectError(error)) return c.json({ success: true })
@@ -644,8 +666,12 @@ app.get('/api/account/orders', async (c) => {
     const customer = await getCustomerAccount(auth.session.id)
     if (!customer) return c.json({ success: false, message: 'Account not found' }, 404)
     writeCustomerSession(c, customer)
-    const orders = await listAccountOrders({ customerId: customer.id, phone: customer.phone })
-    return c.json({ success: true, data: { account: customer, orders } })
+    const [orders, viewed, bought] = await Promise.all([
+      listAccountOrders({ customerId: customer.id, phone: customer.phone }),
+      listAccountInterest(customer.id),
+      listAccountPurchases({ customerId: customer.id, phone: customer.phone }),
+    ])
+    return c.json({ success: true, data: { account: customer, orders, viewed, bought } })
   } catch (error) {
     return c.json({ success: false, message: databaseErrorMessage(error) }, 400)
   }
@@ -1327,6 +1353,17 @@ app.get('/api/admin/orders', async (c) => {
   if (auth.error) return c.json(auth.error, auth.status)
   try {
     return c.json({ success: true, data: await listCheckoutOrders() })
+  } catch (error) {
+    if (isMysqlConnectError(error)) return c.json({ success: true, data: [] })
+    throw error
+  }
+})
+
+app.get('/api/admin/interest', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  try {
+    return c.json({ success: true, data: await listClientInterestBoard() })
   } catch (error) {
     if (isMysqlConnectError(error)) return c.json({ success: true, data: [] })
     throw error

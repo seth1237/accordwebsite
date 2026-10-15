@@ -15,6 +15,7 @@ export type CheckoutOrder = {
   phone: string
   email: string
   location: string
+  customerId?: string
   amount: number
   items: CheckoutItem[]
   mpesaReceipt: string

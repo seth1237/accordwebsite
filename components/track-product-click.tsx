@@ -31,6 +31,7 @@ export function TrackProductClick({
 
     void fetch('/api/products/click', {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         productId,

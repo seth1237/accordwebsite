@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { BarChart3, BookOpen, Briefcase, Calendar, CreditCard, FileText, ImagePlus, LayoutDashboard, Link2, LogOut, Package, Search, Settings, Store, Tag, Wrench } from 'lucide-react'
+import { BarChart3, BookOpen, Briefcase, Calendar, CreditCard, FileText, Heart, ImagePlus, LayoutDashboard, Link2, LogOut, Package, Search, Settings, Store, Tag, Wrench } from 'lucide-react'
 
 const nav = [
   { href: '/admin', label: 'Overview', icon: LayoutDashboard },
   { href: '/admin/products', label: 'Products', icon: Package },
   { href: '/admin/checkout', label: 'Checkout', icon: CreditCard },
+  { href: '/admin/interest', label: 'Client interest', icon: Heart },
   { href: '/admin/images', label: 'Images', icon: ImagePlus },
   { href: '/admin/catalogues', label: 'Catalogues', icon: FileText },
   { href: '/admin/company-profile', label: 'Company profile', icon: BookOpen },

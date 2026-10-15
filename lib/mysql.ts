@@ -4,7 +4,7 @@ import type { Catalogue, CatalogueDownload, CompanyProfilePage, MediaAsset, Offe
 import type { CatalogCategory, CatalogProduct } from '@/lib/catalog'
 import { parseCheckoutStatus, type CheckoutItem, type CheckoutOrder, type CheckoutStatus } from '@/lib/checkout'
 import { publicCategorySlug, slugifyName } from '@/lib/catalog'
-import type { CustomerAccount } from '@/lib/customers'
+import type { ClientInterestRow, CustomerAccount, CustomerInterestProduct, CustomerPurchaseProduct } from '@/lib/customers'
 import type { JobApplication } from '@/lib/jobs'
 import { clampRange, defaultRange, fillVisitorSeries, isIsoDate, monthStart, parsePeriod, weekStart } from '@/lib/visitor-report'
 import {
@@ -49,7 +49,7 @@ type SiteSettings = {
   updatedAt: Date
 }
 
-const MYSQL_SCHEMA_VERSION = 14
+const MYSQL_SCHEMA_VERSION = 15
 
 type MysqlState = {
   pool: Pool | null
@@ -511,6 +511,25 @@ async function applyMysqlSchema() {
       last_seen_at DATETIME NOT NULL,
       PRIMARY KEY (id),
       UNIQUE KEY phone (phone)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+  `)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS accord_nx_customer_interest (
+      id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+      customer_id INT UNSIGNED NOT NULL,
+      product_id VARCHAR(80) NOT NULL,
+      product_name VARCHAR(191) NOT NULL,
+      category_id VARCHAR(80) NOT NULL DEFAULT '',
+      category_name VARCHAR(191) NOT NULL DEFAULT '',
+      clicks INT NOT NULL DEFAULT 0,
+      carts INT NOT NULL DEFAULT 0,
+      last_clicked_at DATETIME NULL,
+      last_carted_at DATETIME NULL,
+      created_at DATETIME NOT NULL,
+      updated_at DATETIME NOT NULL,
+      PRIMARY KEY (id),
+      UNIQUE KEY customer_product (customer_id, product_id),
+      KEY customer_updated (customer_id, updated_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
   `)
 }
@@ -1775,6 +1794,7 @@ function mapCheckoutOrder(row: RowDataPacket): CheckoutOrder {
     phone: String(row.phone || ''),
     email: String(row.email || ''),
     location: String(row.location || ''),
+    customerId: row.customer_id ? String(row.customer_id) : '',
     amount: Number(row.amount) || 0,
     items: parseCheckoutItems(row.items_json),
     mpesaReceipt: String(row.mpesa_receipt || ''),
@@ -1916,6 +1936,7 @@ function mapCustomer(row: RowDataPacket): CustomerAccount {
     phone: String(row.phone || ''),
     location: String(row.location || ''),
     createdAt: iso(row.created_at),
+    lastSeenAt: iso(row.last_seen_at),
   }
 }
 
@@ -1991,6 +2012,191 @@ export async function mysqlLinkOrdersToCustomer(customerId: string, phone: strin
     'UPDATE accord_nx_orders SET customer_id = ? WHERE phone = ? AND (customer_id IS NULL OR customer_id = 0)',
     [id, normalized],
   )
+}
+
+export async function mysqlRecordCustomerInterest(input: {
+  customerId: string
+  productId: string
+  productName: string
+  categoryId?: string
+  categoryName?: string
+  kind: 'click' | 'cart'
+}) {
+  const customerId = Number(input.customerId) || 0
+  const productId = String(input.productId || '').trim().slice(0, 80)
+  if (!customerId || !productId) return
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const now = new Date()
+  const name = String(input.productName || '').trim().slice(0, 191) || productId
+  const categoryId = String(input.categoryId || '').trim().slice(0, 80)
+  const categoryName = String(input.categoryName || '').trim().slice(0, 191)
+  if (input.kind === 'cart') {
+    await pool.query(
+      `INSERT INTO accord_nx_customer_interest
+        (customer_id, product_id, product_name, category_id, category_name, clicks, carts, last_carted_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 0, 1, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+        carts = carts + 1,
+        product_name = VALUES(product_name),
+        category_id = IF(VALUES(category_id) <> '', VALUES(category_id), category_id),
+        category_name = IF(VALUES(category_name) <> '', VALUES(category_name), category_name),
+        last_carted_at = VALUES(last_carted_at),
+        updated_at = VALUES(updated_at)`,
+      [customerId, productId, name, categoryId, categoryName, now, now, now],
+    )
+    return
+  }
+  await pool.query(
+    `INSERT INTO accord_nx_customer_interest
+      (customer_id, product_id, product_name, category_id, category_name, clicks, carts, last_clicked_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, 1, 0, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+      clicks = clicks + 1,
+      product_name = VALUES(product_name),
+      category_id = IF(VALUES(category_id) <> '', VALUES(category_id), category_id),
+      category_name = IF(VALUES(category_name) <> '', VALUES(category_name), category_name),
+      last_clicked_at = VALUES(last_clicked_at),
+      updated_at = VALUES(updated_at)`,
+    [customerId, productId, name, categoryId, categoryName, now, now, now],
+  )
+}
+
+function mapInterest(row: RowDataPacket): CustomerInterestProduct {
+  const lastClicked = iso(row.last_clicked_at)
+  const lastCarted = iso(row.last_carted_at)
+  const lastAt = lastClicked && lastCarted
+    ? (lastClicked > lastCarted ? lastClicked : lastCarted)
+    : lastClicked || lastCarted || iso(row.updated_at)
+  return {
+    productId: String(row.product_id || ''),
+    name: String(row.product_name || ''),
+    slug: String(row.slug || ''),
+    categoryName: String(row.category_name || ''),
+    clicks: Number(row.clicks) || 0,
+    carts: Number(row.carts) || 0,
+    lastAt,
+  }
+}
+
+export async function mysqlListCustomerInterest(customerId: string): Promise<CustomerInterestProduct[]> {
+  const id = Number(customerId) || 0
+  if (!id) return []
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT i.product_id, i.product_name, i.category_name, i.clicks, i.carts,
+            i.last_clicked_at, i.last_carted_at, i.updated_at, p.slug
+     FROM accord_nx_customer_interest i
+     LEFT JOIN accord_nx_products p ON p.id = i.product_id
+     WHERE i.customer_id = ?
+     ORDER BY i.updated_at DESC
+     LIMIT 100`,
+    [id],
+  )
+  return rows.map(mapInterest)
+}
+
+async function mysqlProductSlugs(ids: string[]) {
+  const unique = [...new Set(ids.map((id) => String(id || '').trim()).filter(Boolean))]
+  if (!unique.length) return new Map<string, string>()
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const placeholders = unique.map(() => '?').join(',')
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `SELECT id, slug FROM accord_nx_products WHERE id IN (${placeholders})`,
+    unique,
+  )
+  return new Map(rows.map((row) => [String(row.id), String(row.slug || '')]))
+}
+
+export async function mysqlListCustomerPurchases(input: { customerId?: string; phone?: string }): Promise<CustomerPurchaseProduct[]> {
+  const orders = (await mysqlListCustomerOrders(input)).filter((order) => order.status === 'paid')
+  const byId = new Map<string, CustomerPurchaseProduct>()
+  for (const order of orders) {
+    for (const item of order.items) {
+      const productId = String(item.productId || '').trim()
+      if (!productId) continue
+      const existing = byId.get(productId)
+      if (existing) {
+        existing.quantity += item.quantity
+        if (order.createdAt > existing.lastBoughtAt) existing.lastBoughtAt = order.createdAt
+      } else {
+        byId.set(productId, {
+          productId,
+          name: item.name,
+          slug: '',
+          quantity: item.quantity,
+          lastBoughtAt: order.createdAt,
+        })
+      }
+    }
+  }
+  const slugs = await mysqlProductSlugs([...byId.keys()])
+  for (const item of byId.values()) item.slug = slugs.get(item.productId) || ''
+  return [...byId.values()].sort((a, b) => b.lastBoughtAt.localeCompare(a.lastBoughtAt))
+}
+
+export async function mysqlListCustomers(): Promise<CustomerAccount[]> {
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const [rows] = await pool.query<RowDataPacket[]>(
+    'SELECT * FROM accord_nx_customers ORDER BY last_seen_at DESC LIMIT 200',
+  )
+  return rows.map(mapCustomer)
+}
+
+export async function mysqlListClientInterestBoard(): Promise<ClientInterestRow[]> {
+  const customers = await mysqlListCustomers()
+  if (!customers.length) return []
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  const [interestRows] = await pool.query<RowDataPacket[]>(
+    `SELECT i.customer_id, i.product_id, i.product_name, i.category_name, i.clicks, i.carts,
+            i.last_clicked_at, i.last_carted_at, i.updated_at, p.slug
+     FROM accord_nx_customer_interest i
+     LEFT JOIN accord_nx_products p ON p.id = i.product_id
+     ORDER BY i.updated_at DESC
+     LIMIT 2000`,
+  )
+  const viewedByCustomer = new Map<string, CustomerInterestProduct[]>()
+  for (const row of interestRows) {
+    const customerId = String(row.customer_id)
+    const list = viewedByCustomer.get(customerId) || []
+    if (list.length < 40) list.push(mapInterest(row))
+    viewedByCustomer.set(customerId, list)
+  }
+  const paid = (await mysqlListCheckoutOrders()).filter((order) => order.status === 'paid')
+  const slugs = await mysqlProductSlugs(paid.flatMap((order) => order.items.map((item) => item.productId)))
+  const boughtByKey = new Map<string, CustomerPurchaseProduct[]>()
+  function pushPurchase(key: string, productId: string, name: string, quantity: number, at: string) {
+    if (!key || !productId) return
+    const list = boughtByKey.get(key) || []
+    const existing = list.find((item) => item.productId === productId)
+    if (existing) {
+      existing.quantity += quantity
+      if (at > existing.lastBoughtAt) existing.lastBoughtAt = at
+    } else {
+      list.push({ productId, name, slug: slugs.get(productId) || '', quantity, lastBoughtAt: at })
+    }
+    boughtByKey.set(key, list)
+  }
+  for (const order of paid) {
+    for (const item of order.items) {
+      pushPurchase(order.phone, item.productId, item.name, item.quantity, order.createdAt)
+      if (order.customerId) pushPurchase(`id:${order.customerId}`, item.productId, item.name, item.quantity, order.createdAt)
+    }
+  }
+  return customers.map((account) => {
+    const byPhone = boughtByKey.get(account.phone) || []
+    const byId = boughtByKey.get(`id:${account.id}`) || []
+    const bought = byId.length ? byId : byPhone
+    return {
+      account,
+      viewed: viewedByCustomer.get(account.id) || [],
+      bought: bought.sort((a, b) => b.lastBoughtAt.localeCompare(a.lastBoughtAt)),
+    }
+  })
 }
 
 export async function mysqlIsLocalCatalogReady() {

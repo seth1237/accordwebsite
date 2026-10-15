@@ -15,8 +15,8 @@ import {
 } from '@/lib/mysql'
 import { isMpesaConfigured, mpesaStkPush, mpesaStkQuery, parseMpesaCallback } from '@/lib/mpesa'
 
-export function publicCheckoutOrder(order: CheckoutOrder): Omit<CheckoutOrder, 'mpesaCheckoutId'> {
-  const { mpesaCheckoutId: _hidden, ...visible } = order
+export function publicCheckoutOrder(order: CheckoutOrder): Omit<CheckoutOrder, 'mpesaCheckoutId' | 'customerId'> {
+  const { mpesaCheckoutId: _hidden, customerId: _customer, ...visible } = order
   return { ...visible, phone: maskPhone(order.phone) }
 }
 
