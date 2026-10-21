@@ -51,7 +51,7 @@ export function createManufacturerBrochureUploadSignature() {
 
 export async function getManufacturerBrochure(publicId: string) {
   if (!publicId) return null
-  if (!new RegExp(`^${MANUFACTURER_BROCHURE_FOLDER}/[0-9a-f-]{36}$`).test(publicId)) {
+  if (!new RegExp(`^${MANUFACTURER_BROCHURE_FOLDER}/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}(?:\\.pdf)?$`, 'i').test(publicId)) {
     throw new Error('Invalid brochure upload')
   }
 
