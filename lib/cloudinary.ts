@@ -1,4 +1,8 @@
 import { v2 as cloudinary } from 'cloudinary'
+import { randomUUID } from 'node:crypto'
+
+const MANUFACTURER_BROCHURE_FOLDER = 'tarumed/manufacturers'
+const MAX_MANUFACTURER_BROCHURE_SIZE = 20 * 1024 * 1024
 
 function cloudName() {
   return process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD_NAME || ''
@@ -21,6 +25,54 @@ export function isCloudinaryConfigured(): boolean {
   const config = getCloudinaryConfig()
   if (!config.cloudName) return false
   return Boolean((config.apiKey && config.apiSecret) || config.uploadPreset)
+}
+
+export function createManufacturerBrochureUploadSignature() {
+  const config = getCloudinaryConfig()
+  if (!config.cloudName || !config.apiKey || !config.apiSecret) {
+    throw new Error('Signed Cloudinary uploads are not configured')
+  }
+
+  const params = {
+    folder: MANUFACTURER_BROCHURE_FOLDER,
+    public_id: randomUUID(),
+    timestamp: Math.floor(Date.now() / 1000),
+    overwrite: 'false',
+    filename_override: 'brochure.pdf',
+  }
+
+  return {
+    cloudName: config.cloudName,
+    apiKey: config.apiKey,
+    ...params,
+    signature: cloudinary.utils.api_sign_request(params, config.apiSecret),
+  }
+}
+
+export async function getManufacturerBrochure(publicId: string) {
+  if (!publicId) return null
+  if (!new RegExp(`^${MANUFACTURER_BROCHURE_FOLDER}/[0-9a-f-]{36}$`).test(publicId)) {
+    throw new Error('Invalid brochure upload')
+  }
+
+  const config = getCloudinaryConfig()
+  if (!config.cloudName || !config.apiKey || !config.apiSecret) {
+    throw new Error('Signed Cloudinary uploads are not configured')
+  }
+
+  configureCloudinary()
+  const resource = await cloudinary.api.resource(publicId, { resource_type: 'raw' })
+  if (
+    resource.resource_type !== 'raw'
+    || resource.format !== 'pdf'
+    || typeof resource.bytes !== 'number'
+    || resource.bytes > MAX_MANUFACTURER_BROCHURE_SIZE
+    || typeof resource.secure_url !== 'string'
+  ) {
+    throw new Error('Upload a PDF under 20MB')
+  }
+
+  return { publicId: resource.public_id, secureUrl: resource.secure_url }
 }
 
 export function configureCloudinary(): void {
