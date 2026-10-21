@@ -760,7 +760,7 @@ app.post('/api/manufacturers/apply', async (c) => {
   if (!companyName || !email || !contactName) return c.json({ success: false, message: 'Company name, contact name, and email are required' }, 400)
   try {
     const brochure = form.get('brochure') instanceof File
-      ? await uploadFormDocument(form.get('brochure'), 'tarumed/manufacturers', slugifyName(companyName) || 'maker')
+      ? await uploadFormDocument(form.get('brochure'), 'accord/manufacturers', slugifyName(companyName) || 'maker')
       : await getManufacturerBrochure(formText(form, 'brochurePublicId'))
     const item = await createManufacturer({
       companyName,

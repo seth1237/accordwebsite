@@ -1,7 +1,7 @@
 import { v2 as cloudinary } from 'cloudinary'
 import { randomUUID } from 'node:crypto'
 
-const MANUFACTURER_BROCHURE_FOLDER = 'tarumed/manufacturers'
+const MANUFACTURER_BROCHURE_FOLDER = 'accord/manufacturers'
 const MAX_MANUFACTURER_BROCHURE_SIZE = 20 * 1024 * 1024
 
 function cloudName() {
@@ -62,14 +62,21 @@ export async function getManufacturerBrochure(publicId: string) {
 
   configureCloudinary()
   const resource = await cloudinary.api.resource(publicId, { resource_type: 'raw' })
-  if (
-    resource.resource_type !== 'raw'
-    || resource.format !== 'pdf'
-    || typeof resource.bytes !== 'number'
-    || resource.bytes > MAX_MANUFACTURER_BROCHURE_SIZE
-    || typeof resource.secure_url !== 'string'
-  ) {
+  if (resource.resource_type !== 'raw') throw new Error('The brochure upload is not a raw PDF')
+
+  const format = typeof resource.format === 'string' ? resource.format.toLowerCase() : ''
+  const uploadedPublicId = typeof resource.public_id === 'string' ? resource.public_id.toLowerCase() : ''
+  if (format !== 'pdf' && !uploadedPublicId.endsWith('.pdf')) {
+    throw new Error('Upload a PDF brochure')
+  }
+  if (typeof resource.bytes !== 'number' || !Number.isFinite(resource.bytes)) {
+    throw new Error('Could not verify the brochure file size')
+  }
+  if (resource.bytes > MAX_MANUFACTURER_BROCHURE_SIZE) {
     throw new Error('Upload a PDF under 20MB')
+  }
+  if (typeof resource.secure_url !== 'string') {
+    throw new Error('Could not retrieve the uploaded brochure')
   }
 
   return { publicId: resource.public_id, secureUrl: resource.secure_url }
