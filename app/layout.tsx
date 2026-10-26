@@ -21,8 +21,8 @@ export const metadata: Metadata = {
   publisher: COMPANY.name,
   category: 'medical equipment',
   icons: {
-    icon: COMPANY.logo,
-    shortcut: COMPANY.logo,
+    icon: '/icon.png',
+    shortcut: '/icon.png',
     apple: COMPANY.logo,
   },
   openGraph: {
