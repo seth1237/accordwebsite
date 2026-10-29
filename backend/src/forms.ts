@@ -1,5 +1,5 @@
 import type { MediaAsset } from '../../lib/content'
-import { isCloudinaryConfigured, uploadSiteFile, uploadSiteImage } from '../../lib/cloudinary'
+import { isCloudinaryConfigured, uploadSiteImage } from '../../lib/cloudinary'
 import { isMysqlConfigured, mysqlSaveFile } from '../../lib/mysql'
 import { prepareStoredImage } from '../../lib/image-convert'
 
@@ -58,16 +58,13 @@ export async function uploadFormDocument(file: FormDataEntryValue | null, folder
   if (file.size > 20 * 1024 * 1024) throw new Error('Upload a PDF under 20MB')
   const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
   if (!isPdf) throw new Error('Upload a PDF catalogue')
+  if (!isMysqlConfigured()) throw new Error('Document storage is not configured')
   const buffer = Buffer.from(await file.arrayBuffer())
-  if (isMysqlConfigured()) {
-    return mysqlSaveFile({
-      kind: 'document',
-      ownerKey: `${folder}/${id}`,
-      filename: file.name || `${id}.pdf`,
-      mime: file.type || 'application/pdf',
-      buffer,
-    })
-  }
-  const uploaded = await uploadSiteFile(buffer, folder, id, file.name || 'catalogue.pdf')
-  return { publicId: uploaded.public_id, secureUrl: uploaded.secure_url }
+  return mysqlSaveFile({
+    kind: 'document',
+    ownerKey: `${folder}/${id}`,
+    filename: file.name || `${id}.pdf`,
+    mime: file.type || 'application/pdf',
+    buffer,
+  })
 }

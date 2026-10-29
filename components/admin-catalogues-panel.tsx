@@ -56,24 +56,32 @@ export function AdminCataloguesPanel({
     setMessage('')
     const form = event.currentTarget
     const previous = catalogues.filter((item) => item.erpProductId === productId)
-    const response = await fetch('/api/admin/catalogues', { method: 'POST', body: new FormData(form) })
-    const payload = await response.json()
-    if (!response.ok) {
+    try {
+      const response = await fetch('/api/admin/catalogues', {
+        method: 'POST',
+        body: new FormData(form),
+        signal: AbortSignal.timeout(120_000),
+      })
+      const payload = await response.json().catch(() => ({})) as { message?: string }
+      if (!response.ok) {
+        setMessage(payload.message || 'Could not save catalogue')
+        return
+      }
+      for (const item of previous) {
+        await fetch(`/api/admin/catalogues/${item._id}`, { method: 'DELETE' }).catch(() => null)
+      }
+      setMessage('Catalogue saved. View Catalogue on that product page will download this PDF.')
+      form.reset()
+      setTitle('')
+      setProductId('')
+      setProductQuery('')
+      setFileName('')
+      router.refresh()
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not save catalogue')
+    } finally {
       setSaving(false)
-      setMessage(payload.message || 'Could not save catalogue')
-      return
     }
-    for (const item of previous) {
-      await fetch(`/api/admin/catalogues/${item._id}`, { method: 'DELETE' }).catch(() => null)
-    }
-    setSaving(false)
-    setMessage('Catalogue saved. View Catalogue on that product page will download this PDF.')
-    form.reset()
-    setTitle('')
-    setProductId('')
-    setProductQuery('')
-    setFileName('')
-    router.refresh()
   }
 
   async function remove(id: string) {

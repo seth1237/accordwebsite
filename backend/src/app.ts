@@ -97,7 +97,7 @@ import {
 } from '../../lib/mysql'
 import { catalogImportStatus, importCatalogBatch } from '../../lib/catalog-import'
 import { PRODUCT_CSV_TEMPLATE, productsToExcelXml } from '../../lib/product-csv'
-import { createManufacturerBrochureUploadSignature, deleteCloudinaryImage, getManufacturerBrochure, isCloudinaryConfigured, uploadProductImage } from '../../lib/cloudinary'
+import { deleteCloudinaryImage, isCloudinaryConfigured, uploadProductImage } from '../../lib/cloudinary'
 import { createERPQuote } from '../../lib/erp'
 import { COMPANY } from '../../lib/utils'
 import {
@@ -740,17 +740,6 @@ app.get('/api/auth/me', (c) => {
   return c.json({ success: true, email: session.email })
 })
 
-app.post('/api/manufacturers/brochure-upload-signature', (c) => {
-  try {
-    return c.json({ success: true, data: createManufacturerBrochureUploadSignature() })
-  } catch (error) {
-    return c.json({
-      success: false,
-      message: error instanceof Error ? error.message : 'Brochure uploads are unavailable right now',
-    }, 503)
-  }
-})
-
 app.post('/api/manufacturers/apply', async (c) => {
   if (!isStoreConfigured()) return c.json({ success: false, message: 'Applications are not available right now' }, 503)
   const form = await c.req.formData()
@@ -759,9 +748,7 @@ app.post('/api/manufacturers/apply', async (c) => {
   const contactName = formText(form, 'contactName')
   if (!companyName || !email || !contactName) return c.json({ success: false, message: 'Company name, contact name, and email are required' }, 400)
   try {
-    const brochure = form.get('brochure') instanceof File
-      ? await uploadFormDocument(form.get('brochure'), 'accord/manufacturers', slugifyName(companyName) || 'maker')
-      : await getManufacturerBrochure(formText(form, 'brochurePublicId'))
+    const brochure = await uploadFormDocument(form.get('brochure'), 'accord/manufacturers', slugifyName(companyName) || 'maker')
     const item = await createManufacturer({
       companyName,
       contactName,
@@ -1225,28 +1212,26 @@ app.post('/api/admin/catalogues', async (c) => {
   const product = catalog.products.find((item) => item.id === erpProductId)
   const upload = form.get('file')
   if (!(upload instanceof File) || upload.size <= 0) return c.json({ success: false, message: 'Upload a PDF catalogue' }, 400)
-  const item = isMysqlConfigured()
-    ? await createCatalogue({
-        title,
-        erpProductId,
-        categoryId: product?.categoryId || '',
-        productName: product?.name || '',
-        file: { publicId: '', secureUrl: '' },
-        fileBytes: Buffer.from(await upload.arrayBuffer()),
-        filename: upload.name || 'catalogue.pdf',
-        mime: upload.type || 'application/pdf',
-      })
-    : await createCatalogue({
-        title,
-        erpProductId,
-        categoryId: product?.categoryId || '',
-        productName: product?.name || '',
-        file: await uploadFormDocument(upload, 'tarumed/catalogues', slugifyName(title) || 'catalogue').then((file) => {
-          if (!file) throw new Error('Upload a PDF catalogue')
-          return file
-        }),
-      })
-  return c.json({ success: true, data: item, catalogues: await listCatalogues() })
+  const isPdf = upload.type === 'application/pdf' || upload.name.toLowerCase().endsWith('.pdf')
+  if (!isPdf) return c.json({ success: false, message: 'Upload a PDF catalogue' }, 400)
+  if (upload.size > 20 * 1024 * 1024) return c.json({ success: false, message: 'Upload a PDF under 20MB' }, 400)
+  if (!isMysqlConfigured()) return c.json({ success: false, message: 'Document storage is not configured' }, 503)
+  try {
+    const item = await createCatalogue({
+      title,
+      erpProductId,
+      categoryId: product?.categoryId || '',
+      productName: product?.name || '',
+      file: { publicId: '', secureUrl: '' },
+      fileBytes: Buffer.from(await upload.arrayBuffer()),
+      filename: upload.name || 'catalogue.pdf',
+      mime: upload.type || 'application/pdf',
+    })
+    return c.json({ success: true, data: item, catalogues: await listCatalogues() })
+  } catch (error) {
+    if (isMysqlConnectError(error)) return c.json({ success: false, message: 'Could not save the catalogue right now. Please try again shortly.' }, 503)
+    return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not upload catalogue' }, 500)
+  }
 })
 
 app.delete('/api/admin/catalogues/:id', async (c) => {
@@ -1254,7 +1239,9 @@ app.delete('/api/admin/catalogues/:id', async (c) => {
   if (auth.error) return c.json(auth.error, auth.status)
   const removed = await deleteCatalogue(c.req.param('id'))
   if (!removed) return c.json({ success: false, message: 'Catalogue not found' }, 404)
-  if (removed.file?.publicId) await deleteCloudinaryImage(removed.file.publicId, 'raw').catch(() => undefined)
+  if (removed.file?.publicId && !removed.file.publicId.startsWith('mysql:')) {
+    await deleteCloudinaryImage(removed.file.publicId, 'raw').catch(() => undefined)
+  }
   return c.json({ success: true })
 })
 

@@ -241,6 +241,15 @@ export function AdminProductsPanel({
   }
 
   async function uploadCatalogue(product: CatalogProduct, file: File) {
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+    if (!isPdf) {
+      setMessage('Upload a PDF catalogue')
+      return
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      setMessage('Upload a PDF under 20MB')
+      return
+    }
     setBusyId(product.id)
     setMessage('')
     const previous = catalogues.filter((item) => item.erpProductId === product.id)
@@ -248,19 +257,27 @@ export function AdminProductsPanel({
     body.set('title', `${product.name} catalogue`)
     body.set('erpProductId', product.id)
     body.set('file', file)
-    const response = await fetch('/api/admin/catalogues', { method: 'POST', body })
-    const payload = await response.json()
-    if (!response.ok) {
+    try {
+      const response = await fetch('/api/admin/catalogues', {
+        method: 'POST',
+        body,
+        signal: AbortSignal.timeout(120_000),
+      })
+      const payload = await response.json().catch(() => ({})) as { message?: string }
+      if (!response.ok) {
+        setMessage(payload.message || 'Could not upload catalogue')
+        return
+      }
+      for (const item of previous) {
+        await fetch(`/api/admin/catalogues/${item._id}`, { method: 'DELETE' }).catch(() => null)
+      }
+      setMessage('Machine catalogue PDF saved.')
+      router.refresh()
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not upload catalogue')
+    } finally {
       setBusyId(null)
-      setMessage(payload.message || 'Could not upload catalogue')
-      return
     }
-    for (const item of previous) {
-      await fetch(`/api/admin/catalogues/${item._id}`, { method: 'DELETE' }).catch(() => null)
-    }
-    setBusyId(null)
-    setMessage('Machine catalogue PDF saved.')
-    router.refresh()
   }
 
   async function removeCatalogue(id: string, productId: string) {

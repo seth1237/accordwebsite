@@ -20,6 +20,7 @@ import {
   type SearchHistoryRow,
   type SearchReport,
 } from '@/lib/search-analytics'
+import { deleteStoredDocument, isDocumentKind, readStoredDocument, writeStoredDocument } from '@/lib/local-files'
 
 setDefaultResultOrder('ipv4first')
 
@@ -49,7 +50,7 @@ type SiteSettings = {
   updatedAt: Date
 }
 
-const MYSQL_SCHEMA_VERSION = 15
+const MYSQL_SCHEMA_VERSION = 16
 
 type MysqlState = {
   pool: Pool | null
@@ -370,6 +371,7 @@ async function applyMysqlSchema() {
   `)
   }
   await mysqlAddColumnIfMissing('accord_nx_files', 'source_url', `source_url VARCHAR(512) NOT NULL DEFAULT ''`)
+  await mysqlAddColumnIfMissing('accord_nx_files', 'storage_path', `storage_path VARCHAR(512) NOT NULL DEFAULT ''`)
   await mysqlAddColumnIfMissing('accord_nx_site_settings', 'use_local_catalog', `use_local_catalog TINYINT(1) NOT NULL DEFAULT 0`)
   await mysqlAddColumnIfMissing('accord_nx_products', 'seo', `seo LONGTEXT NULL`)
   await mysqlAddColumnIfMissing('accord_nx_products', 'hidden', `hidden TINYINT(1) NOT NULL DEFAULT 0`)
@@ -558,7 +560,13 @@ type FileRow = RowDataPacket & {
   mime: string
   file_data?: Buffer
   source_url?: string
+  storage_path?: string
   created_at: Date
+}
+
+async function fileBytesFromRow(row: Pick<FileRow, 'file_data' | 'storage_path'>) {
+  if (row.storage_path) return readStoredDocument(row.storage_path)
+  return Buffer.isBuffer(row.file_data) ? row.file_data : Buffer.from(row.file_data || [])
 }
 
 type AdminRow = RowDataPacket & {
@@ -634,20 +642,30 @@ export async function mysqlSaveFile(input: {
   sourceUrl?: string
 }): Promise<MediaAsset> {
   await ensureMysqlSchema()
-  const pool = await getPool()
-  const [result] = await pool.query<ResultSetHeader>(
-    'INSERT INTO accord_nx_files (kind, owner_key, filename, mime, file_data, source_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    [
-      input.kind,
-      input.ownerKey || '',
-      input.filename || 'file',
-      input.mime || 'application/octet-stream',
-      input.buffer,
-      input.sourceUrl || '',
-      new Date(),
-    ],
-  )
-  return fileAsset(result.insertId)
+  const storeOnDisk = isDocumentKind(input.kind)
+  const storagePath = storeOnDisk
+    ? await writeStoredDocument({ kind: input.kind, filename: input.filename, buffer: input.buffer })
+    : ''
+  try {
+    const pool = await getPool()
+    const [result] = await pool.query<ResultSetHeader>(
+      'INSERT INTO accord_nx_files (kind, owner_key, filename, mime, file_data, source_url, storage_path, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        input.kind,
+        input.ownerKey || '',
+        input.filename || 'file',
+        input.mime || 'application/octet-stream',
+        storeOnDisk ? Buffer.alloc(0) : input.buffer,
+        input.sourceUrl || '',
+        storagePath,
+        new Date(),
+      ],
+    )
+    return fileAsset(result.insertId)
+  } catch (error) {
+    if (storagePath) await deleteStoredDocument(storagePath)
+    throw error
+  }
 }
 
 export async function mysqlGetFile(id: string | number) {
@@ -656,7 +674,7 @@ export async function mysqlGetFile(id: string | number) {
   await ensureMysqlSchema()
   const pool = await getPool()
   const [rows] = await pool.query<FileRow[]>(
-    'SELECT id, kind, owner_key, filename, mime, file_data, created_at FROM accord_nx_files WHERE id = ? LIMIT 1',
+    'SELECT id, kind, owner_key, filename, mime, file_data, storage_path, created_at FROM accord_nx_files WHERE id = ? LIMIT 1',
     [fileId],
   )
   const row = rows[0]
@@ -667,7 +685,7 @@ export async function mysqlGetFile(id: string | number) {
     ownerKey: row.owner_key,
     filename: row.filename,
     mime: row.mime,
-    data: Buffer.isBuffer(row.file_data) ? row.file_data : Buffer.from(row.file_data || []),
+    data: await fileBytesFromRow(row),
   }
 }
 
@@ -795,7 +813,12 @@ export async function mysqlDeleteFile(publicIdOrId: string) {
   if (!id) return false
   await ensureMysqlSchema()
   const pool = await getPool()
+  const [rows] = await pool.query<FileRow[]>(
+    'SELECT storage_path FROM accord_nx_files WHERE id = ? LIMIT 1',
+    [id],
+  )
   const [result] = await pool.query<ResultSetHeader>('DELETE FROM accord_nx_files WHERE id = ?', [id])
+  if (rows[0]?.storage_path) await deleteStoredDocument(rows[0].storage_path)
   return result.affectedRows > 0
 }
 
@@ -921,7 +944,7 @@ export async function mysqlGetCatalogueFile(id: string) {
   await ensureMysqlSchema()
   const pool = await getPool()
   const [rows] = await pool.query<(CatalogueRow & FileRow)[]>(
-    `SELECT c.id, c.product_name, c.title, f.filename, f.mime, f.file_data
+    `SELECT c.id, c.product_name, c.title, f.filename, f.mime, f.file_data, f.storage_path
      FROM accord_nx_catalogues c
      JOIN accord_nx_files f ON f.id = c.file_id
      WHERE c.id = ? LIMIT 1`,
@@ -932,7 +955,7 @@ export async function mysqlGetCatalogueFile(id: string) {
   return {
     filename: row.filename || `${row.product_name || row.title || 'catalogue'}.pdf`,
     mime: row.mime || 'application/pdf',
-    data: Buffer.isBuffer(row.file_data) ? row.file_data : Buffer.from(row.file_data || []),
+    data: await fileBytesFromRow(row),
   }
 }
 
