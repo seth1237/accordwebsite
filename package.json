@@ -8,9 +8,9 @@
     "dev:backend": "npm --prefix backend run dev",
     "dev:all": "npx --yes concurrently -k -n api,web -c cyan,magenta \"npm --prefix backend run dev\" \"next dev\"",
     "start:backend": "npm --prefix backend run start",
-    "build": "next build",
-    "start": "next start",
-    "start:prod": "NODE_ENV=production next start"
+    "build": "next build && node scripts/copy-standalone-assets.mjs",
+    "start": "node scripts/start-web.mjs",
+    "start:prod": "NODE_ENV=production node scripts/start-web.mjs"
   },
   "engines": {
     "node": "24.x"

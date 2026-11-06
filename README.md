@@ -32,10 +32,10 @@ Node 20 or newer is required.
 ```bash
 npm ci
 npm run build
-npm run start
+PORT=4140 HOSTNAME=127.0.0.1 npm run start
 ```
 
-`next start` serves the production build (default port 3000, or `PORT`). Point Nginx or Caddy at that port with HTTPS for `accordmedical.co.ke`.
+Do not run `next dev` or `next start` on the VPS. This app builds a standalone server; `npm run start` copies CSS/JS into it and runs `node .next/standalone/server.js`. Point Nginx at that port with HTTPS for `accordmedical.co.ke`. Restart PM2 after the build so it is not still serving an old `next start` / `next dev` process.
 
 ## Admin
 
