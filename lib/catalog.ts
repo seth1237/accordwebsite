@@ -165,6 +165,35 @@ export function sanitizeHtml(html: string | null | undefined) {
     .replace(/javascript:/gi, '')
 }
 
+function escapeText(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+export function textToProductHtml(raw: string) {
+  const text = String(raw || '').trim()
+  if (!text) return ''
+  if (/<[a-z][\s\S]*>/i.test(text)) return sanitizeHtml(text)
+  const lines = text.split(/\r?\n/).map((line) => line.trim())
+  const items = lines
+    .filter(Boolean)
+    .map((line) => line.replace(/^(?:[•\-\*]|\d+[.)])\s+/, '').trim())
+    .filter(Boolean)
+  const bulletCount = lines.filter((line) => /^(?:[•\-\*]|\d+[.)])\s+/.test(line)).length
+  if (items.length > 1 && (bulletCount >= items.length / 2 || items.every((item) => item.length < 140))) {
+    return `<ul>${items.map((item) => `<li>${escapeText(item)}</li>`).join('')}</ul>`
+  }
+  return text
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block) => `<p>${escapeText(block).replace(/\n/g, '<br />')}</p>`)
+    .join('')
+}
+
 export function toProduct(p: ShopItem): CatalogProduct | null {
   const name = String(p.product_name || '').trim()
   const slug = String(p.product_slug || '').trim()

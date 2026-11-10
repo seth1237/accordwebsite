@@ -922,7 +922,8 @@ h1, h2, h3, p { margin: 0; }
 .product-info strong, .detail-price { font-size: 14px; color: var(--primary); }
 .detail-price { font-size: 32px; font-weight: 800; margin: 16px 0 8px; letter-spacing: -.03em; }
 .detail-price.quote-note { font-size: 15px; font-weight: 700; letter-spacing: 0; margin: 10px 0 4px; }
-.product-lede { color: var(--muted-foreground); font-size: 14px; line-height: 1.6; margin: 10px 0 0; max-width: 46ch; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.product-lede { color: var(--muted-foreground); font-size: 15px; line-height: 1.65; margin: 10px 0 16px; max-width: 62ch; }
+.product-copy-title { color: var(--navy); font-size: 18px; margin: 0 0 8px; font-weight: 700; }
 .product-distributed { color: var(--muted-foreground); font-size: 13px; margin: 4px 0 0; }
 .detail-stock { font-size: 13px; color: var(--muted-foreground); margin-bottom: 22px; }
 .view-detail { color: var(--muted-foreground); font-size: 11px; display: inline-flex; gap: 4px; align-items: center; flex-shrink: 0; }

@@ -13,6 +13,7 @@ export function AdminCatalogCreate({ categories }: { categories: CatalogCategory
   const [useNewCategory, setUseNewCategory] = useState(false)
   const [productName, setProductName] = useState('')
   const [productDescription, setProductDescription] = useState('')
+  const [productDetails, setProductDetails] = useState('')
   const [photoCount, setPhotoCount] = useState(0)
   const [draggingPhotos, setDraggingPhotos] = useState(false)
 
@@ -22,6 +23,7 @@ export function AdminCatalogCreate({ categories }: { categories: CatalogCategory
     setUseNewCategory(next === 'product' && categories.length === 0)
     setProductName('')
     setProductDescription('')
+    setProductDetails('')
     setPhotoCount(0)
     setDraggingPhotos(false)
   }
@@ -128,7 +130,7 @@ export function AdminCatalogCreate({ categories }: { categories: CatalogCategory
           </label>
           <label>
             Details
-            <textarea name="details" rows={5} placeholder="Specifications, pack size, usage notes" />
+            <textarea name="details" rows={5} placeholder="Specifications, pack size, usage notes" value={productDetails} onChange={(event) => setProductDetails(event.target.value)} />
           </label>
           <div className="admin-job-row">
             <label>

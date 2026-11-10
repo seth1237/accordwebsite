@@ -7,6 +7,7 @@ import {
   mergeOverlay,
   publicCategorySlug,
   stripHtml,
+  textToProductHtml,
   type Catalog,
   type CatalogCategory,
   type CatalogProduct,
@@ -133,22 +134,6 @@ export async function getCatalog(categoryIds?: string[], options?: { includeHidd
     return state.memo.catalog
   }
 
-  const cached = !includeHidden && !categoryIds?.length ? (lastCatalog() || (await readDevCatalogCache())) : null
-  if (cached?.products.length) {
-    const publicCached = {
-      ...cached,
-      products: cached.products.filter((product) => !product.hidden),
-    }
-    state.memo = { key, at: Date.now(), catalog: publicCached }
-    if (!state.inflight.has(key)) {
-      const refresh = loadCatalog(key, categoryIds, includeHidden).finally(() => {
-        state.inflight.delete(key)
-      })
-      state.inflight.set(key, refresh)
-    }
-    return publicCached
-  }
-
   const pending = state.inflight.get(key)
   if (pending) return pending
 
@@ -215,10 +200,12 @@ export async function createCatalogProduct(input: {
   }
   if (!categoryName) throw new Error('Choose or enter a category')
   const category = await mysqlEnsureCategory({ name: categoryName, slug: categoryId || publicCategorySlug(categoryName) })
+  const description = stripHtml(String(input.description || '').trim())
+  const details = textToProductHtml(String(input.details || '').trim())
   const product = await mysqlCreateCatalogProduct({
     name,
-    description: input.description,
-    details: input.details || input.description,
+    description,
+    details,
     categoryId: category.slug,
     categoryName: category.name,
     manufacturer: input.manufacturer,
@@ -228,6 +215,7 @@ export async function createCatalogProduct(input: {
     seo: input.seo,
     slug: input.slug,
   })
+  if (details) await mysqlUpdateProductDetails(product.id, details)
   await mysqlSetLocalCatalogReady(true).catch(() => null)
   await invalidateCatalog()
   return product
@@ -238,16 +226,18 @@ export async function updateCatalogProduct(
   updates: { name?: string; details?: string; distributedFor?: string; description?: string; hidden?: boolean; checkout?: boolean },
 ) {
   if (!isMysqlConfigured()) throw new Error('MySQL is not configured')
+  const details = updates.details !== undefined ? textToProductHtml(String(updates.details)) : undefined
+  const description = updates.description !== undefined ? stripHtml(String(updates.description)) : undefined
   const product = await mysqlUpdateCatalogProduct(id, {
     name: updates.name,
-    details: updates.details,
-    description: updates.description,
+    details,
+    description,
     hidden: updates.hidden,
     checkout: updates.checkout,
   })
   if (!product) throw new Error('Product not found')
-  if (updates.details !== undefined || updates.distributedFor !== undefined) {
-    await mysqlUpdateProductDetails(product.id, updates.details ?? product.details ?? '', {
+  if (details !== undefined || updates.distributedFor !== undefined) {
+    await mysqlUpdateProductDetails(product.id, details ?? product.details ?? '', {
       distributedFor: updates.distributedFor,
     })
   }

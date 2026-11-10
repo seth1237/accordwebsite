@@ -927,13 +927,14 @@ app.patch('/api/admin/products/:id', async (c) => {
   if (auth.error) return c.json(auth.error, auth.status)
   if (!isMysqlConfigured()) return c.json({ success: false, message: 'MySQL is not configured' }, 503)
   const id = c.req.param('id')
-  const body = await c.req.json().catch(() => ({})) as { name?: string; details?: string; distributedFor?: string; hidden?: boolean; checkout?: boolean }
-  if (!String(body.name || '').trim() && body.details === undefined && body.distributedFor === undefined && typeof body.hidden !== 'boolean' && typeof body.checkout !== 'boolean') {
+  const body = await c.req.json().catch(() => ({})) as { name?: string; description?: string; details?: string; distributedFor?: string; hidden?: boolean; checkout?: boolean }
+  if (!String(body.name || '').trim() && body.description === undefined && body.details === undefined && body.distributedFor === undefined && typeof body.hidden !== 'boolean' && typeof body.checkout !== 'boolean') {
     return c.json({ success: false, message: 'Nothing to update' }, 400)
   }
   try {
     const data = await updateCatalogProduct(id, {
       name: String(body.name || '').trim() || undefined,
+      description: body.description,
       details: body.details,
       distributedFor: body.distributedFor,
       hidden: typeof body.hidden === 'boolean' ? body.hidden : undefined,

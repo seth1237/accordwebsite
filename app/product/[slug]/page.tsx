@@ -9,7 +9,7 @@ import { TrackProductClick } from '@/components/track-product-click'
 import { RelatedProducts } from '@/components/related-products'
 import { JsonLd } from '@/components/json-ld'
 import { Breadcrumbs } from '@/components/breadcrumbs'
-import { displayPrice, productHref } from '@/lib/catalog'
+import { displayPrice, productHref, sanitizeHtml, stripHtml } from '@/lib/catalog'
 import { catalogueDownloadHref } from '@/lib/content'
 import { pageMetadata, productBreadcrumbItems, productMetaDescription, productPageJsonLd } from '@/lib/seo'
 import { seoKeywordsList } from '@/lib/seo-fields'
@@ -50,6 +50,11 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const revealPrice = showPrices && (!product.onOffer || product.offerShowPrice !== false)
   const priceLabel = displayPrice(product, revealPrice)
   const crumbs = productBreadcrumbItems(product)
+  const description = stripHtml(product.description)
+  const detailsHtml = sanitizeHtml(product.details)
+  const detailsText = stripHtml(detailsHtml)
+  const showDescription = Boolean(description && description !== detailsText)
+  const showDetails = Boolean(detailsText)
 
   return (
     <main className="min-h-screen">
@@ -87,36 +92,32 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                   <p className="offer-was">Was {displayPrice({ price: product.compareAt }, true)}</p>
                 ) : null}
                 <QuoteForm product={product} catalogueHref={catalogueHref} />
-                {product.details ? (
-                  <div className="product-tabs" id="details">
-                    <div className="product-tablist" role="tablist">
-                      <span className="active">Details</span>
-                    </div>
-                    <div className="product-specs">
-                      <h2 className="sr-only">Product details</h2>
-                      <div dangerouslySetInnerHTML={{ __html: product.details }} />
-                    </div>
-                  </div>
-                ) : product.description ? (
-                  <div className="product-tabs" id="details">
-                    <div className="product-tablist" role="tablist">
-                      <span className="active">Details</span>
-                    </div>
-                    <div className="product-specs">
-                      <h2 className="sr-only">Product details</h2>
-                      <p>{product.description}</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="product-tabs" id="details">
-                    <h2 className="sr-only">About this equipment</h2>
-                    <p>
-                      {product.name}
-                      {product.categoryName ? ` is listed under ${product.categoryName}` : ''} at {COMPANY.name}.
-                      Request a quote for pricing, installation and availability in Kenya.
-                    </p>
-                  </div>
-                )}
+                <div className="product-tabs" id="details">
+                  {showDescription ? (
+                    <>
+                      <h2 className="product-copy-title">Description</h2>
+                      <p className="product-lede">{description}</p>
+                    </>
+                  ) : null}
+                  {showDetails ? (
+                    <>
+                      <div className="product-tablist" role="tablist">
+                        <span className="active">Details</span>
+                      </div>
+                      <div className="product-specs" dangerouslySetInnerHTML={{ __html: detailsHtml }} />
+                    </>
+                  ) : null}
+                  {!showDescription && !showDetails ? (
+                    <>
+                      <h2 className="sr-only">About this equipment</h2>
+                      <p>
+                        {product.name}
+                        {product.categoryName ? ` is listed under ${product.categoryName}` : ''} at {COMPANY.name}.
+                        Request a quote for pricing, installation and availability in Kenya.
+                      </p>
+                    </>
+                  ) : null}
+                </div>
               </div>
             </div>
           </div>

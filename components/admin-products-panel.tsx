@@ -40,6 +40,7 @@ export function AdminProductsPanel({
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [message, setMessage] = useState('')
   const [details, setDetails] = useState<Record<string, string>>({})
+  const [descriptions, setDescriptions] = useState<Record<string, string>>({})
   const [names, setNames] = useState<Record<string, string>>({})
   const [distributedFor, setDistributedFor] = useState<Record<string, string>>({})
   const [uploadKind, setUploadKind] = useState<Record<string, 'photo' | 'installation'>>({})
@@ -164,6 +165,7 @@ export function AdminProductsPanel({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name,
+        description: descriptions[productId] ?? (product?.description || ''),
         details: details[productId] ?? (product?.details || ''),
         distributedFor: distributedFor[productId] ?? (product?.distributedFor || ''),
       }),
@@ -420,6 +422,15 @@ export function AdminProductsPanel({
                       <input
                         value={names[product.id] ?? product.name}
                         onChange={(event) => setNames((current) => ({ ...current, [product.id]: event.target.value }))}
+                      />
+                    </label>
+                    <label>
+                      Description
+                      <textarea
+                        value={descriptions[product.id] ?? product.description ?? ''}
+                        onChange={(event) => setDescriptions((current) => ({ ...current, [product.id]: event.target.value }))}
+                        rows={3}
+                        placeholder="What the product is and who it is for"
                       />
                     </label>
                     <label>
