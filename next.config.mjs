@@ -64,7 +64,7 @@ const nextConfig = {
       { source: '/category/hosptital-furniture', destination: '/category/furniture', permanent: true },
       { source: '/brand/:slug', destination: '/manufacturers', permanent: true },
       { source: '/product-tag/:slug', destination: '/products', permanent: true },
-      { source: '/privacy-policy.html', destination: '/about.html', permanent: true },
+      { source: '/privacy-policy.html', destination: '/privacy.html', permanent: false },
       { source: '/terms-conditions.html', destination: '/about.html', permanent: true },
       { source: '/jobs/:slug', destination: '/vacancy/:slug', permanent: true },
       { source: '/quote', destination: '/cart/view', permanent: true },

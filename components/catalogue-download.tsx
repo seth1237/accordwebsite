@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { trackAnalytics } from '@/lib/client-analytics'
 
 function prefersReducedMotion() {
   return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -31,6 +32,7 @@ export function CatalogueDownloadLink({
 
   function start(event: React.MouseEvent<HTMLAnchorElement>) {
     event.preventDefault()
+    trackAnalytics({ type: 'file_download', path: href })
     if (prefersReducedMotion()) {
       triggerDownload(href, filename)
       return

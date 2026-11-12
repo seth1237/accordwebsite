@@ -50,7 +50,7 @@ type SiteSettings = {
   updatedAt: Date
 }
 
-const MYSQL_SCHEMA_VERSION = 16
+const MYSQL_SCHEMA_VERSION = 17
 
 type MysqlState = {
   pool: Pool | null
@@ -201,6 +201,12 @@ async function getPool(): Promise<Pool> {
     if (state.warmPromise) state.warmPromise = null
   })
   return state.warmPromise
+}
+
+export async function withMysqlPool<T>(fn: (pool: Pool) => Promise<T>): Promise<T> {
+  await ensureMysqlSchema()
+  const pool = await getPool()
+  return fn(pool)
 }
 
 async function withMysqlRetry<T>(fn: () => Promise<T>): Promise<T> {
@@ -534,6 +540,8 @@ async function applyMysqlSchema() {
       KEY customer_updated (customer_id, updated_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
   `)
+  const { applyKenyaAnalyticsSchema } = await import('@/lib/kenya-analytics-data')
+  await applyKenyaAnalyticsSchema(pool)
 }
 
 export async function ensureMysqlSchema() {

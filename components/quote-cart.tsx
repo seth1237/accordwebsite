@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { CatalogProduct } from '@/lib/catalog'
+import { trackAnalytics } from '@/lib/client-analytics'
 
 const STORAGE_KEY = 'tarumed-quote-cart'
 
@@ -60,6 +61,7 @@ export function QuoteCartProvider({ children }: { children: React.ReactNode }) {
       const last = Number(sessionStorage.getItem(key) || 0)
       if (Date.now() - last >= 1500) {
         sessionStorage.setItem(key, String(Date.now()))
+        trackAnalytics({ type: 'add_to_cart', productId: product.id, productName: product.name })
         void fetch('/api/products/cart', {
           method: 'POST',
           credentials: 'include',
@@ -97,8 +99,10 @@ export function QuoteCartProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const remove = useCallback((id: string) => {
-    setItems((current) => current.filter((item) => item.id !== id))
-  }, [])
+    const item = items.find((entry) => entry.id === id)
+    if (item) trackAnalytics({ type: 'remove_from_cart', productId: item.id, productName: item.name })
+    setItems((current) => current.filter((entry) => entry.id !== id))
+  }, [items])
 
   const setQuantity = useCallback((id: string, quantity: number) => {
     const next = Math.max(1, Math.min(1000, Math.floor(quantity) || 1))

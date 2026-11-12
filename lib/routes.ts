@@ -18,6 +18,7 @@ export const ROUTES = {
   manufacturers: '/manufacturers',
   manufacturersApply: '/manufacturers/apply',
   biomedical: '/biomedical-engineering-services.html',
+  privacy: '/privacy.html',
 } as const
 
 export function vacancyHref(slug: string) {

@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { Search } from 'lucide-react'
 import { productHref, type SearchProduct } from '@/lib/catalog'
 import type { SearchTrigger } from '@/lib/search-analytics'
+import { trackAnalytics } from '@/lib/client-analytics'
 
 const VISITOR_KEY = 'accord_vid'
 const SESSION_KEY = 'accord_sid'
@@ -80,6 +81,7 @@ export function SearchBox({
       return
     }
     lastSent.current = { key, at: now }
+    trackAnalytics({ type: 'search', searchTerm: raw.slice(0, 120), path: pathnameRef.current || '/' })
     const body = JSON.stringify({
       query: raw.slice(0, 120),
       resultCount,

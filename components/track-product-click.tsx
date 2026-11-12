@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import { trackOfferEvent } from '@/lib/offer-track'
+import { trackAnalytics } from '@/lib/client-analytics'
 
 const LAST_KEY = 'tarumed-last-product'
 
@@ -29,6 +30,11 @@ export function TrackProductClick({
       sessionStorage.setItem(LAST_KEY, productId)
     } catch {}
 
+    trackAnalytics({
+      type: 'view_item',
+      productId,
+      productName,
+    })
     void fetch('/api/products/click', {
       method: 'POST',
       credentials: 'include',

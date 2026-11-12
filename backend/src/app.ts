@@ -116,6 +116,9 @@ import {
   startCheckout,
 } from '../../lib/checkout-data'
 import { getCustomerAccount, listAccountOrders, listAccountInterest, listAccountPurchases, listClientInterestBoard, loginCustomer, recordCustomerInterest, registerCustomer } from '../../lib/account-data'
+import { parseAnalyticsRange } from '../../lib/kenya-analytics'
+import { kenyaAnalyticsOverview, kenyaCountyCompare, kenyaCountyDetail, kenyaOverviewCsv, recordKenyaAnalytics } from '../../lib/kenya-analytics-data'
+import { clientIpFromHeaders } from '../../lib/kenya-geo'
 
 const CORS_ORIGINS = new Set([
   'https://accordmedical.co.ke',
@@ -553,6 +556,67 @@ app.post('/api/analytics/visit', async (c) => {
   } catch (error) {
     if (isMysqlConnectError(error)) return c.json({ success: true })
     return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not record visit' }, 500)
+  }
+})
+
+app.post('/api/analytics/session', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>
+    const ip = clientIpFromHeaders({ get: (name) => c.req.header(name) || null })
+    await recordKenyaAnalytics({
+      ip,
+      userAgent: c.req.header('user-agent') || '',
+      visitorId: textValue(body.visitorId, 64),
+      sessionId: textValue(body.sessionId, 64),
+      referrer: textValue(body.referrer, 255),
+      landingPath: textValue(body.landingPath, 255),
+      pageview: body.pageview && typeof body.pageview === 'object' ? body.pageview as Record<string, unknown> : undefined,
+      events: Array.isArray(body.events) ? body.events as Array<Record<string, unknown>> : [],
+    })
+    return c.json({ success: true })
+  } catch (error) {
+    if (isMysqlConnectError(error)) return c.json({ success: true })
+    return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not record session' }, 500)
+  }
+})
+
+app.post('/api/analytics/events', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>
+    const ip = clientIpFromHeaders({ get: (name) => c.req.header(name) || null })
+    await recordKenyaAnalytics({
+      ip,
+      userAgent: c.req.header('user-agent') || '',
+      visitorId: textValue(body.visitorId, 64),
+      sessionId: textValue(body.sessionId, 64),
+      referrer: textValue(body.referrer, 255),
+      landingPath: textValue(body.landingPath, 255),
+      events: Array.isArray(body.events) ? body.events as Array<Record<string, unknown>> : [],
+    })
+    return c.json({ success: true })
+  } catch (error) {
+    if (isMysqlConnectError(error)) return c.json({ success: true })
+    return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not record events' }, 500)
+  }
+})
+
+app.post('/api/analytics/pageview', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>
+    const ip = clientIpFromHeaders({ get: (name) => c.req.header(name) || null })
+    await recordKenyaAnalytics({
+      ip,
+      userAgent: c.req.header('user-agent') || '',
+      visitorId: textValue(body.visitorId, 64),
+      sessionId: textValue(body.sessionId, 64),
+      referrer: textValue(body.referrer, 255),
+      landingPath: textValue(body.path || body.landingPath, 255),
+      pageview: body,
+    })
+    return c.json({ success: true })
+  } catch (error) {
+    if (isMysqlConnectError(error)) return c.json({ success: true })
+    return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not record page view' }, 500)
   }
 })
 
@@ -1272,6 +1336,118 @@ app.get('/api/admin/performance', async (c) => {
   } catch (error) {
     if (isMysqlConnectError(error)) return c.json({ success: true, data: [] })
     throw error
+  }
+})
+
+function analyticsQueryRange(c: { req: { query: (name: string) => string | undefined } }) {
+  return parseAnalyticsRange({
+    range: c.req.query('range') || c.req.query('period') || '',
+    start: c.req.query('start_date') || c.req.query('from') || '',
+    end: c.req.query('end_date') || c.req.query('to') || '',
+  })
+}
+
+app.get('/api/admin/analytics/overview', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  try {
+    const data = await kenyaAnalyticsOverview(analyticsQueryRange(c), { device: c.req.query('device_type') || '', visitorType: c.req.query('visitor_type') || '' })
+    return c.json({ success: true, data })
+  } catch (error) {
+    if (isMysqlConnectError(error)) return c.json({ success: false, message: 'Analytics are unavailable right now' }, 503)
+    return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not load analytics' }, 500)
+  }
+})
+
+app.get('/api/admin/analytics/kenya-map', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  try {
+    const data = await kenyaAnalyticsOverview(analyticsQueryRange(c))
+    return c.json({ success: true, data: { range: data.range, counties: data.counties, updatedAt: data.updatedAt } })
+  } catch (error) {
+    if (isMysqlConnectError(error)) return c.json({ success: false, message: 'Analytics are unavailable right now' }, 503)
+    return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not load map' }, 500)
+  }
+})
+
+app.get('/api/admin/analytics/counties/compare', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  const codes = String(c.req.query('codes') || c.req.query('county_code') || '').split(',').map((item) => item.trim()).filter(Boolean)
+  try {
+    const data = await kenyaCountyCompare(codes, analyticsQueryRange(c))
+    return c.json({ success: true, data })
+  } catch (error) {
+    if (isMysqlConnectError(error)) return c.json({ success: false, message: 'Analytics are unavailable right now' }, 503)
+    return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not compare counties' }, 500)
+  }
+})
+
+app.get('/api/admin/analytics/counties/:id', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  try {
+    const data = await kenyaCountyDetail(c.req.param('id'), analyticsQueryRange(c))
+    if (!data) return c.json({ success: false, message: 'County not found' }, 404)
+    return c.json({ success: true, data })
+  } catch (error) {
+    if (isMysqlConnectError(error)) return c.json({ success: false, message: 'Analytics are unavailable right now' }, 503)
+    return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not load county' }, 500)
+  }
+})
+
+app.get('/api/admin/analytics/counties', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  try {
+    const data = await kenyaAnalyticsOverview(analyticsQueryRange(c))
+    return c.json({ success: true, data: data.counties })
+  } catch (error) {
+    if (isMysqlConnectError(error)) return c.json({ success: false, message: 'Analytics are unavailable right now' }, 503)
+    return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not load counties' }, 500)
+  }
+})
+
+app.get('/api/admin/analytics/products', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  try {
+    const data = await kenyaAnalyticsOverview(analyticsQueryRange(c))
+    return c.json({ success: true, data: data.topProducts })
+  } catch (error) {
+    if (isMysqlConnectError(error)) return c.json({ success: false, message: 'Analytics are unavailable right now' }, 503)
+    return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not load products' }, 500)
+  }
+})
+
+app.get('/api/admin/analytics/traffic-sources', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  try {
+    const data = await kenyaAnalyticsOverview(analyticsQueryRange(c))
+    return c.json({ success: true, data: data.trafficSources })
+  } catch (error) {
+    if (isMysqlConnectError(error)) return c.json({ success: false, message: 'Analytics are unavailable right now' }, 503)
+    return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not load traffic sources' }, 500)
+  }
+})
+
+app.get('/api/admin/analytics/export', async (c) => {
+  const auth = requireAdmin(c)
+  if (auth.error) return c.json(auth.error, auth.status)
+  try {
+    const range = analyticsQueryRange(c)
+    const data = await kenyaAnalyticsOverview(range)
+    const csv = kenyaOverviewCsv(data)
+    return c.body(csv, 200, {
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="kenya-analytics-${range.start}-to-${range.end}.csv"`,
+      'Cache-Control': 'private, no-store',
+    })
+  } catch (error) {
+    if (isMysqlConnectError(error)) return c.json({ success: false, message: 'Analytics are unavailable right now' }, 503)
+    return c.json({ success: false, message: error instanceof Error ? error.message : 'Could not export analytics' }, 500)
   }
 })
 

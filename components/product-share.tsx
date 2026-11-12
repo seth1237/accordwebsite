@@ -5,6 +5,7 @@ import { Check, Copy, Share2 } from 'lucide-react'
 import { ShareDestinations } from '@/components/share-destinations'
 import type { CatalogProduct } from '@/lib/catalog'
 import { COMPANY } from '@/lib/utils'
+import { trackAnalytics } from '@/lib/client-analytics'
 
 export function ProductShare({ product }: { product: CatalogProduct }) {
   const [copied, setCopied] = useState(false)
@@ -20,6 +21,7 @@ export function ProductShare({ product }: { product: CatalogProduct }) {
   }
 
   async function recordShare() {
+    trackAnalytics({ type: 'share_product', productId: product.id, productName: product.name })
     void fetch('/api/products/share', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -550,3 +550,44 @@
   .search-kpis { grid-template-columns: 1fr 1fr; }
   .client-interest-split { grid-template-columns: 1fr; }
 }
+.admin-main:has(.kenya-intel) { max-width: 1280px; }
+.kenya-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; align-items: center; }
+.kenya-filters button, .kenya-filters select, .kenya-filters input {
+  border: 1px solid #c5d5d2; background: #fff; color: #123744; padding: 7px 10px; font: inherit; font-size: 12px; border-radius: 999px; cursor: pointer;
+}
+.kenya-filters button.on { background: #1b3d8f; color: #fff; border-color: #1b3d8f; }
+.kenya-stats { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.kenya-map-card { margin-bottom: 18px; }
+.kenya-map-wrap { position: relative; }
+.kenya-map { height: 520px; border: 1px solid #c8d4d1; background: #eef4f3; }
+.kenya-map-tools { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+.kenya-reset { border: 1px solid #c5d5d2; background: #fff; padding: 6px 12px; font: inherit; font-size: 12px; cursor: pointer; }
+.kenya-legend { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #60767d; }
+.kenya-legend i { width: 22px; height: 10px; display: block; }
+.kenya-legend i:nth-child(2) { background: #d5e0de; }
+.kenya-legend i:nth-child(3) { background: #8ec4b4; }
+.kenya-legend i:nth-child(4) { background: #2f9a7a; }
+.kenya-legend i:nth-child(5) { background: #08755d; }
+.kenya-lower { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.kenya-rank { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.kenya-rank li, .kenya-list li { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
+.kenya-rank a, .kenya-list span { color: #123744; text-decoration: none; }
+.kenya-rank small, .kenya-list small { display: block; color: #60767d; font-weight: 400; }
+.kenya-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; }
+.kenya-bars { display: flex; align-items: end; gap: 3px; height: 140px; }
+.kenya-bars > div { flex: 1; height: 100%; display: flex; align-items: end; }
+.kenya-bars span { display: block; width: 100%; background: #087f85; min-height: 2px; }
+.kenya-hours { height: 110px; }
+.kenya-note { font-size: 12px; color: #60767d; line-height: 1.5; }
+.kenya-compare-pick { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.kenya-compare-pick label { border: 1px solid #c5d5d2; padding: 6px 10px; font-size: 12px; background: #fff; display: flex; gap: 6px; align-items: center; }
+.kenya-compare-pick label.on { border-color: #1b3d8f; background: #eef3fb; }
+.kenya-table-wrap { overflow: auto; margin-top: 16px; }
+.kenya-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.kenya-table th, .kenya-table td { border-bottom: 1px solid #e4eeec; padding: 8px; text-align: left; }
+.kenya-intel h1 small { font-size: 16px; color: #087f85; }
+@media (max-width: 900px) {
+  .kenya-stats { grid-template-columns: 1fr 1fr; }
+  .kenya-lower { grid-template-columns: 1fr; }
+  .kenya-map { height: 380px; }
+}
